@@ -1,500 +1,326 @@
 <!-- src/routes/weather/[location]/+page.svelte -->
-<script>
-  import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
-  import WeatherCard from '$lib/components/WeatherCard.svelte';
-
-  // Get location from URL params
-  $: location = $page.params.location || '';
-  
-  // Search functionality
-  let searchLocation = '';
-  let searchInput;
-
-  /**
-   * Handle search form submission
-   */
-  function handleSearch(event) {
-    event.preventDefault();
-    
-    if (!searchLocation.trim()) return;
-    
-    const cleanLocation = searchLocation.trim();
-    searchLocation = '';
-    
-    // Navigate to weather page for new location
-    goto(`/weather/${encodeURIComponent(cleanLocation)}`);
-  }
-
-  /**
-   * Handle popular location clicks
-   */
-  function selectLocation(selectedLocation) {
-    goto(`/weather/${encodeURIComponent(selectedLocation)}`);
-  }
-
-  // Popular Slovak cities
-  const popularLocations = [
-    'Bratislava',
-    'Košice', 
-    'Prešov',
-    'Žilina',
-    'Banská Bystrica',
-    'Nitra',
-    'Trnava',
-    'Martin'
-  ];
-
-  // International cities
-  const internationalCities = [
-    'Praha',
-    'Wien',
-    'Budapest',
-    'Warsaw',
-    'Munich',
-    'London',
-    'Paris',
-    'New York'
-  ];
-
-  // Focus search input on mount
-  onMount(() => {
-    if (searchInput) {
-      searchInput.focus();
-    }
-  });
-</script>
-
 <svelte:head>
-  <title>
-    {location ? `Počasie ${location} - Weather App Pro` : 'Weather App Pro - Aktuálne počasie'}
-  </title>
-  <meta name="description" content="Aktuálne počasie a predpoveď pre {location || 'vašu lokalitu'}. Presné météo údaje v reálnom čase.">
+	<title>Weather {location} - Weather App Pro</title>
+	<meta name="description" content="Current weather conditions for {location}" />
 </svelte:head>
 
-<div class="weather-page">
-  
-  <!-- Header -->
-  <header class="weather-header">
-    <div class="container">
-      <h1 class="app-title">
-        <span class="title-icon">🌤️</span>
-        Weather App Pro
-      </h1>
-      
-      <p class="app-subtitle">
-        Presné počasie v reálnom čase
-      </p>
-    </div>
-  </header>
+<script>
+	import { page } from '$app/stores';
+	import { onMount } from 'svelte';
 
-  <!-- Search Section -->
-  <section class="search-section">
-    <div class="container">
-      
-      <form class="search-form" on:submit={handleSearch}>
-        <div class="search-input-group">
-          <input
-            bind:this={searchInput}
-            bind:value={searchLocation}
-            type="text"
-            placeholder="Zadajte názov mesta..."
-            class="search-input"
-            autocomplete="off"
-          >
-          <button type="submit" class="search-btn" disabled={!searchLocation.trim()}>
-            🔍 Hľadať
-          </button>
-        </div>
-      </form>
+	// Get location from URL
+	$: location = $page.params.location || '';
 
-      <!-- Quick Location Buttons -->
-      {#if !location}
-        <div class="quick-locations">
-          
-          <div class="location-group">
-            <h3 class="location-group-title">🇸🇰 Slovensko</h3>
-            <div class="location-buttons">
-              {#each popularLocations as city}
-                <button 
-                  class="location-btn"
-                  on:click={() => selectLocation(city)}
-                >
-                  {city}
-                </button>
-              {/each}
-            </div>
-          </div>
+	// Weather data
+	let weatherData = null;
+	let loading = true;
+	let error = null;
 
-          <div class="location-group">
-            <h3 class="location-group-title">🌍 Svet</h3>
-            <div class="location-buttons">
-              {#each internationalCities as city}
-                <button 
-                  class="location-btn international"
-                  on:click={() => selectLocation(city)}
-                >
-                  {city}
-                </button>
-              {/each}
-            </div>
-          </div>
+	// API configuration
+	const API_BASE_URL = 'https://weather-app-backend-ug2o.onrender.com';
 
-        </div>
-      {/if}
+	async function fetchWeather() {
+		if (!location) return;
+		
+		try {
+			loading = true;
+			error = null;
+			
+			const response = await fetch(`${API_BASE_URL}/api/weather/${encodeURIComponent(location)}`);
+			
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+				throw new Error(errorData.detail || `HTTP ${response.status}`);
+			}
 
-    </div>
-  </section>
+			weatherData = await response.json();
+		} catch (err) {
+			console.error('Weather fetch error:', err);
+			error = err.message || 'Failed to fetch weather data';
+			weatherData = null;
+		} finally {
+			loading = false;
+		}
+	}
 
-  <!-- Weather Display -->
-  <section class="weather-section">
-    <div class="container">
-      
-      {#if location}
-        <!-- Weather Card -->
-        <WeatherCard 
-          {location} 
-          autoRefresh={true}
-          refreshInterval={300000}
-        />
+	// Weather icon mapping
+	function getWeatherIcon(code) {
+		const icons = {
+			1000: "☀️", 1100: "🌤️", 1101: "⛅", 1102: "🌥️", 1001: "☁️",
+			2000: "🌫️", 2100: "🌫️", 4000: "🌦️", 4001: "🌧️", 4200: "🌦️", 
+			4201: "⛈️", 5000: "🌨️", 5001: "❄️", 5100: "🌨️", 5101: "❄️",
+			6000: "🌧️", 6001: "🧊", 6200: "🧊", 6201: "🧊", 7000: "🧊", 
+			7101: "🧊", 7102: "🧊", 8000: "⛈️"
+		};
+		return icons[code] || "🌤️";
+	}
 
-        <!-- Back to Search -->
-        <div class="back-section">
-          <button class="back-btn" on:click={() => goto('/weather')}>
-            ← Vyhľadať iné mesto
-          </button>
-        </div>
+	function getWeatherDescription(code) {
+		const descriptions = {
+			1000: "Jasno, slnečno", 1100: "Prevažne jasno", 1101: "Čiastočne zamračené",
+			1102: "Prevažne zamračené", 1001: "Zamračené", 2000: "Hmla", 2100: "Ľahká hmla",
+			4000: "Mrholenie", 4001: "Dážď", 4200: "Ľahký dážď", 4201: "Silný dážď",
+			5000: "Sneh", 5001: "Snehové vločky", 5100: "Ľahký sneh", 5101: "Silný sneh",
+			6000: "Mrznúce mrholenie", 6001: "Mrznúci dážď", 6200: "Ľahký mrznúci dážď",
+			6201: "Silný mrznúci dážď", 7000: "Ľadové guľôčky", 7101: "Silné ľadové guľôčky",
+			7102: "Ľahké ľadové guľôčky", 8000: "Búrka"
+		};
+		return descriptions[code] || "Neznáme počasie";
+	}
 
-      {:else}
-        <!-- Welcome Message -->
-        <div class="welcome-section">
-          <div class="welcome-card">
-            <div class="welcome-icon">🌦️</div>
-            <h2 class="welcome-title">Vitajte v Weather App Pro</h2>
-            <p class="welcome-text">
-              Získajte presné a aktuálne informácie o počasí pre akúkoľvek lokalitu na svete.
-              Vyhľadajte svoje mesto alebo vyberte z obľúbených miest vyššie.
-            </p>
-            
-            <div class="features">
-              <div class="feature">
-                <span class="feature-icon">⚡</span>
-                <span>Údaje v reálnom čase</span>
-              </div>
-              <div class="feature">
-                <span class="feature-icon">🌍</span>
-                <span>Globálne pokrytie</span>
-              </div>
-              <div class="feature">
-                <span class="feature-icon">📱</span>
-                <span>Mobilné zariadenia</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      {/if}
+	function getWindDirection(degrees) {
+		const directions = [
+			"Sever", "Severovýchod", "Východ", "Juhovýchod",
+			"Juh", "Juhozápad", "Západ", "Severozápad"
+		];
+		const index = Math.round(degrees / 45) % 8;
+		return directions[index];
+	}
 
-    </div>
-  </section>
+	onMount(() => {
+		if (location) {
+			fetchWeather();
+		}
+	});
 
+	// Refetch when location changes
+	$: if (location) {
+		fetchWeather();
+	}
+</script>
+
+<div class="content">
+	<h1>📍 Weather for {location}</h1>
+
+	{#if loading}
+		<div class="loading">
+			<p>⏳ Loading weather data...</p>
+		</div>
+
+	{:else if error}
+		<div class="error">
+			<h2>❌ Error</h2>
+			<p>{error}</p>
+			<button on:click={fetchWeather} class="retry-btn">
+				🔄 Try Again
+			</button>
+		</div>
+
+	{:else if weatherData}
+		<div class="weather-card">
+			<div class="main-weather">
+				<div class="weather-icon">
+					{getWeatherIcon(weatherData.weather.weatherCode)}
+				</div>
+				<div class="temperature">
+					{Math.round(weatherData.weather.temperature)}°C
+				</div>
+			</div>
+
+			<div class="weather-description">
+				{getWeatherDescription(weatherData.weather.weatherCode)}
+			</div>
+
+			<div class="weather-details">
+				<div class="detail-row">
+					<span class="detail-label">💧 Humidity:</span>
+					<span class="detail-value">{weatherData.weather.humidity}%</span>
+				</div>
+
+				<div class="detail-row">
+					<span class="detail-label">💨 Wind:</span>
+					<span class="detail-value">
+						{weatherData.weather.windSpeed.toFixed(1)} m/s 
+						{getWindDirection(weatherData.weather.windDirection)}
+					</span>
+				</div>
+
+				<div class="detail-row">
+					<span class="detail-label">👁️ Visibility:</span>
+					<span class="detail-value">{weatherData.weather.visibility} km</span>
+				</div>
+
+				<div class="detail-row">
+					<span class="detail-label">☁️ Cloud Cover:</span>
+					<span class="detail-value">{weatherData.weather.cloudCover}%</span>
+				</div>
+			</div>
+
+			<div class="weather-footer">
+				<small>Last updated: {new Date().toLocaleString()}</small>
+				<br>
+				<small>Powered by Tomorrow.io</small>
+			</div>
+		</div>
+
+		<button on:click={fetchWeather} class="refresh-btn">
+			🔄 Refresh Weather
+		</button>
+
+	{:else}
+		<div class="no-data">
+			<p>No weather data available for {location}</p>
+		</div>
+	{/if}
+
+	<div class="navigation">
+		<a href="/weather">← Search Another City</a>
+		<span> | </span>
+		<a href="/">🏠 Home</a>
+	</div>
 </div>
 
 <style>
-  .weather-page {
-    min-height: 100vh;
-    background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
-  }
+	.content {
+		width: 100%;
+		max-width: var(--column-width);
+		margin: var(--column-margin-top) auto 0 auto;
+		padding: 2rem;
+	}
 
-  .container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 0 20px;
-  }
+	h1 {
+		font-size: 2rem;
+		text-align: center;
+		margin-bottom: 2rem;
+	}
 
-  /* Header */
-  .weather-header {
-    padding: 40px 0 20px;
-    text-align: center;
-    color: white;
-  }
+	.loading, .error, .no-data {
+		text-align: center;
+		padding: 2rem;
+		background: #f9f9f9;
+		border-radius: 10px;
+		margin: 1rem 0;
+	}
 
-  .app-title {
-    font-size: 2.5rem;
-    font-weight: 700;
-    margin: 0 0 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-  }
+	.error {
+		background: #ffe6e6;
+		border: 2px solid #ff4444;
+	}
 
-  .title-icon {
-    font-size: 3rem;
-  }
+	.retry-btn {
+		margin-top: 1rem;
+		padding: 0.5rem 1rem;
+		background: #ff4444;
+		color: white;
+		border: none;
+		border-radius: 5px;
+		cursor: pointer;
+	}
 
-  .app-subtitle {
-    font-size: 1.2rem;
-    opacity: 0.9;
-    margin: 0;
-    font-weight: 300;
-  }
+	.weather-card {
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		color: white;
+		border-radius: 15px;
+		padding: 2rem;
+		margin: 2rem 0;
+		text-align: center;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+	}
 
-  /* Search Section */
-  .search-section {
-    padding: 20px 0 40px;
-  }
+	.main-weather {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 2rem;
+		margin-bottom: 1rem;
+	}
 
-  .search-form {
-    margin-bottom: 40px;
-  }
+	.weather-icon {
+		font-size: 4rem;
+	}
 
-  .search-input-group {
-    display: flex;
-    gap: 12px;
-    max-width: 500px;
-    margin: 0 auto;
-  }
+	.temperature {
+		font-size: 3.5rem;
+		font-weight: bold;
+	}
 
-  .search-input {
-    flex: 1;
-    padding: 16px 20px;
-    border: none;
-    border-radius: 25px;
-    font-size: 1rem;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-  }
+	.weather-description {
+		font-size: 1.3rem;
+		margin-bottom: 2rem;
+		opacity: 0.9;
+	}
 
-  .search-input:focus {
-    outline: none;
-    background: white;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-    transform: translateY(-2px);
-  }
+	.weather-details {
+		display: grid;
+		gap: 1rem;
+		margin-bottom: 2rem;
+	}
 
-  .search-btn {
-    padding: 16px 24px;
-    border: none;
-    border-radius: 25px;
-    background: #00b894;
-    color: white;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    white-space: nowrap;
-  }
+	.detail-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		background: rgba(255, 255, 255, 0.1);
+		padding: 0.75rem 1rem;
+		border-radius: 8px;
+	}
 
-  .search-btn:hover:not(:disabled) {
-    background: #00a085;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 184, 148, 0.3);
-  }
+	.detail-label {
+		font-weight: 500;
+	}
 
-  .search-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
+	.detail-value {
+		font-weight: bold;
+	}
 
-  /* Quick Locations */
-  .quick-locations {
-    display: flex;
-    flex-direction: column;
-    gap: 32px;
-  }
+	.weather-footer {
+		opacity: 0.8;
+		font-size: 0.9rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.2);
+		padding-top: 1rem;
+	}
 
-  .location-group {
-    text-align: center;
-  }
+	.refresh-btn {
+		display: block;
+		margin: 1rem auto;
+		padding: 0.75rem 1.5rem;
+		background: #007acc;
+		color: white;
+		border: none;
+		border-radius: 8px;
+		cursor: pointer;
+		font-weight: bold;
+	}
 
-  .location-group-title {
-    color: white;
-    font-size: 1.3rem;
-    font-weight: 600;
-    margin: 0 0 16px;
-    opacity: 0.9;
-  }
+	.refresh-btn:hover {
+		background: #005fa3;
+	}
 
-  .location-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    justify-content: center;
-  }
+	.navigation {
+		text-align: center;
+		margin: 2rem 0;
+		padding-top: 1rem;
+		border-top: 1px solid #ddd;
+	}
 
-  .location-btn {
-    padding: 12px 20px;
-    border: none;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.15);
-    color: white;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-  }
+	.navigation a {
+		color: #007acc;
+		text-decoration: none;
+		font-weight: 500;
+	}
 
-  .location-btn:hover {
-    background: rgba(255, 255, 255, 0.25);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-  }
+	.navigation a:hover {
+		text-decoration: underline;
+	}
 
-  .location-btn.international {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.15);
-  }
+	@media (max-width: 600px) {
+		.main-weather {
+			flex-direction: column;
+			gap: 1rem;
+		}
 
-  /* Weather Section */
-  .weather-section {
-    padding: 20px 0 60px;
-  }
+		.weather-icon {
+			font-size: 3rem;
+		}
 
-  .back-section {
-    text-align: center;
-    margin-top: 32px;
-  }
+		.temperature {
+			font-size: 2.5rem;
+		}
 
-  .back-btn {
-    padding: 12px 24px;
-    border: none;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-  }
-
-  .back-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: translateY(-2px);
-  }
-
-  /* Welcome Section */
-  .welcome-section {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 400px;
-  }
-
-  .welcome-card {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border-radius: 20px;
-    padding: 40px;
-    text-align: center;
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    max-width: 500px;
-  }
-
-  .welcome-icon {
-    font-size: 4rem;
-    margin-bottom: 24px;
-  }
-
-  .welcome-title {
-    font-size: 1.8rem;
-    font-weight: 600;
-    margin: 0 0 16px;
-  }
-
-  .welcome-text {
-    font-size: 1.1rem;
-    line-height: 1.6;
-    opacity: 0.9;
-    margin: 0 0 32px;
-  }
-
-  .features {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .feature {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    font-size: 1rem;
-    font-weight: 500;
-  }
-
-  .feature-icon {
-    font-size: 1.2rem;
-  }
-
-  /* Responsive Design */
-  @media (max-width: 768px) {
-    .app-title {
-      font-size: 2rem;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .title-icon {
-      font-size: 2.5rem;
-    }
-
-    .search-input-group {
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .location-buttons {
-      gap: 8px;
-    }
-
-    .location-btn {
-      padding: 10px 16px;
-      font-size: 0.9rem;
-    }
-
-    .quick-locations {
-      gap: 24px;
-    }
-
-    .welcome-card {
-      padding: 30px 20px;
-      margin: 0 10px;
-    }
-
-    .welcome-title {
-      font-size: 1.5rem;
-    }
-
-    .features {
-      gap: 12px;
-    }
-  }
-
-  @media (max-width: 480px) {
-    .container {
-      padding: 0 16px;
-    }
-
-    .weather-header {
-      padding: 30px 0 15px;
-    }
-
-    .app-title {
-      font-size: 1.8rem;
-    }
-
-    .search-input, .search-btn {
-      padding: 14px 18px;
-    }
-
-    .location-btn {
-      padding: 8px 12px;
-      font-size: 0.85rem;
-    }
-  }
+		.detail-row {
+			flex-direction: column;
+			gap: 0.5rem;
+			text-align: center;
+		}
+	}
 </style>
