@@ -280,7 +280,7 @@
 			<div class="api-display">
 				<h4>🔗 Aktuálna Tomorrow.io Tile URL:</h4>
 				<code class="tile-url">
-					https://api.tomorrow.io/v4/map/tile/{{z}}/{{x}}/{{y}}/{selectedLayer.id}/current.png?apikey={API_KEY}
+					https://api.tomorrow.io/v4/map/tile/[z]/[x]/[y]/{selectedLayer.id}/current.png?apikey={API_KEY}
 				</code>
 				<p class="api-note">
 					⚠️ Tile sa načítavajú priamo z Tomorrow.io API. Ak sa nezobrazujú, skontroluj API key alebo network connection.
