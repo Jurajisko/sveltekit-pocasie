@@ -1,10 +1,23 @@
-.DS_Store
-node_modules
-/build
-/.svelte-kit
-/package
+# Build outputs
+.svelte-kit/
+build/
+dist/
+
+# Dependencies
+node_modules/
+
+# Environment
 .env
 .env.*
 !.env.example
-.vercel
-.output
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Weather App specific
+weather-cache/
