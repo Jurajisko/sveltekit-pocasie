@@ -1,21 +1,16 @@
-import vercel from '@sveltejs/adapter-vercel';
+import adapter from '@sveltejs/adapter-vercel';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-  kit: {
-    adapter: vercel({
-      // Vercel-specific optimizations
-      runtime: 'nodejs18.x',
-      regions: ['fra1'], // Frankfurt pre European users
-    }),
-    methodOverride: {
-      allowed: ['PATCH', 'DELETE']
-    },
-    // Optimizations pre Weather App
-    preload: {
-      strategy: 'modulepreload'
-    }
-  }
+	kit: {
+		adapter: adapter({
+			runtime: 'nodejs18.x',
+			regions: ['fra1']
+		}),
+		methodOverride: {
+			allowed: ['PATCH', 'DELETE']
+		}
+	}
 };
 
 export default config;
