@@ -1,7 +1,6 @@
 <!-- src/routes/map/+page.svelte -->
 <script>
 	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
 
 	// Tomorrow.io API konfigurácia
 	const API_KEY = 'CoemxyXvE8oBM2nuW2iQ5Ka0X560eUnd';
@@ -20,10 +19,9 @@
 	let map;
 	let mapContainer;
 	let leafletLoaded = false;
-	let mapCenter = [48.7324, 19.4995]; // Slovensko
-	let mapZoom = 6;
 
 	async function loadLeaflet() {
+		// Browser check without $app/environment
 		if (typeof window === 'undefined') return false;
 		
 		try {
@@ -57,8 +55,8 @@
 		try {
 			// Vytvor mapu
 			map = window.L.map(mapContainer, {
-				center: mapCenter,
-				zoom: mapZoom,
+				center: [48.7324, 19.4995], // Slovensko
+				zoom: 6,
 				zoomControl: true
 			});
 
@@ -126,8 +124,6 @@
 	}
 
 	onMount(async () => {
-		if (!browser) return;
-
 		// Načítaj Leaflet a inicializuj mapu
 		const loaded = await loadLeaflet();
 		if (loaded) {
@@ -217,16 +213,6 @@
 				</div>
 			</div>
 
-			<div class="section">
-				<h3>🗺️ Mapa Info</h3>
-				<div class="map-info">
-					<p><strong>Podklad:</strong> OpenStreetMap</p>
-					<p><strong>Weather:</strong> Tomorrow.io tiles</p>
-					<p><strong>Interakcia:</strong> Zoom, Pan, Click</p>
-					<p><strong>Format:</strong> PNG tiles 256x256</p>
-				</div>
-			</div>
-
 		</aside>
 
 		<!-- Map Area -->
@@ -235,7 +221,7 @@
 			<div class="map-header">
 				<h3>🗺️ {selectedLayer.name}</h3>
 				<div class="map-controls">
-					<span class="zoom-info">Zoom: 6 | Center: Slovakia</span>
+					<span class="zoom-info">Interactive Map | Zoom & Pan</span>
 				</div>
 			</div>
 
@@ -451,12 +437,6 @@
 	}
 
 	.layer-info p {
-		margin: 4px 0;
-		font-size: 0.9rem;
-		color: #666;
-	}
-
-	.map-info p {
 		margin: 4px 0;
 		font-size: 0.9rem;
 		color: #666;
