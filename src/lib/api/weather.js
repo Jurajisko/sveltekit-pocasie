@@ -1,6 +1,6 @@
 // src/lib/api/weather.js
 // const API_BASE_URL = 'https://weather-app-backend-ug2o.onrender.com'; // Stary render.com backend python
-const API_BASE_URL = 'https://backend-red-sea-8652.fly.dev';
+const API_BASE_URL = import.meta.env.PUBLIC_API_BASE_URL;
 
 
 /**
