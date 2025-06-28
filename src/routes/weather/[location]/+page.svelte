@@ -17,7 +17,8 @@
 	let error = null;
 
 	// API configuration
-	const API_BASE_URL = 'https://weather-app-backend-ug2o.onrender.com';
+	// const API_BASE_URL = 'https://weather-app-backend-ug2o.onrender.com'; // old connect render.com backend python
+	const API_BASE_URL = import.meta.env.PUBLIC_API_BASE_URL;
 
 	async function fetchWeather() {
 		if (!location) return;
