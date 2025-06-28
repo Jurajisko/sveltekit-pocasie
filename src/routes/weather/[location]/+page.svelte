@@ -18,7 +18,10 @@
 
 	// API configuration
 	// const API_BASE_URL = 'https://weather-app-backend-ug2o.onrender.com'; // old connect render.com backend python
-	const API_BASE_URL = import.meta.env.PUBLIC_API_BASE_URL;
+	// const API_BASE_URL = import.meta.env.PUBLIC_API_BASE_URL;
+	const API_BASE_URL = import.meta.env.PUBLIC_API_BASE_URL || 'https://backend-red-sea-8652.fly.dev';
+
+
 
 	async function fetchWeather() {
 		if (!location) return;
@@ -28,6 +31,7 @@
 			error = null;
 			
 			const response = await fetch(`${API_BASE_URL}/api/weather/${encodeURIComponent(location)}`);
+			console.log("RESPONSE", response);
 			
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
@@ -35,6 +39,8 @@
 			}
 
 			weatherData = await response.json();
+			console.log("JSON DATA", weatherData);
+
 		} catch (err) {
 			console.error('Weather fetch error:', err);
 			error = err.message || 'Failed to fetch weather data';
