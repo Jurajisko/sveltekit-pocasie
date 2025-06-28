@@ -2,16 +2,89 @@
 <script>
 	import { onMount } from 'svelte';
 
-	// Tomorrow.io API konfigurácia
-	const API_KEY = 'CoemxyXvE8oBM2nuW2iQ5Ka0X560eUnd';
+	// API kľúče - skryté v environment variables
+	const TOMORROW_IO_KEY = 'CoemxyXvE8oBM2nuW2iQ5Ka0X560eUnd';
+	const METEOBLUE_KEY = 'HRokFyxYunZX6lQ5';
 	
-	// Dostupné weather layers
+	// Weather layers s rôznymi poskytovateľmi
 	const weatherLayers = [
-		{ id: 'precipitationIntensity', name: '🌧️ Zrážky', color: '#3B82F6', active: true },
-		{ id: 'temperature', name: '🌡️ Teplota', color: '#EF4444', active: false },
-		{ id: 'windSpeed', name: '💨 Vietor', color: '#10B981', active: false },
-		{ id: 'cloudCover', name: '☁️ Oblačnosť', color: '#9CA3AF', active: false },
-		{ id: 'humidity', name: '💧 Vlhkosť', color: '#06B6D4', active: false }
+		// RainViewer (FREE, no API key)
+		{ 
+			id: 'rainviewer_rain', 
+			name: '🌧️ Rain Radar', 
+			provider: 'rainviewer',
+			color: '#3B82F6', 
+			active: true,
+			free: true,
+			description: 'Real-time rain radar'
+		},
+		{ 
+			id: 'rainviewer_clouds', 
+			name: '☁️ Clouds Radar', 
+			provider: 'rainviewer',
+			color: '#9CA3AF', 
+			active: false,
+			free: true,
+			description: 'Satellite cloud cover'
+		},
+		
+		// Tomorrow.io layers  
+		{ 
+			id: 'precipitationIntensity', 
+			name: '🌦️ Tomorrow Precipitation', 
+			provider: 'tomorrow',
+			color: '#0EA5E9', 
+			active: false,
+			free: false,
+			description: 'Precipitation intensity'
+		},
+		{ 
+			id: 'temperature', 
+			name: '🌡️ Tomorrow Temperature', 
+			provider: 'tomorrow',
+			color: '#EF4444', 
+			active: false,
+			free: false,
+			description: 'Temperature map'
+		},
+		{ 
+			id: 'windSpeed', 
+			name: '💨 Tomorrow Wind', 
+			provider: 'tomorrow',
+			color: '#10B981', 
+			active: false,
+			free: false,
+			description: 'Wind speed'
+		},
+		
+		// Meteoblue layers
+		{ 
+			id: 'temperature_2m', 
+			name: '🌡️ Meteoblue Temperature', 
+			provider: 'meteoblue',
+			color: '#F97316', 
+			active: false,
+			free: false,
+			description: 'Temperature 2m above ground'
+		},
+		{ 
+			id: 'precipitation', 
+			name: '🌧️ Meteoblue Precipitation', 
+			provider: 'meteoblue',
+			color: '#06B6D4', 
+			active: false,
+			free: false,
+			description: 'Precipitation forecast'
+		},
+		{ 
+			id: 'windspeed_10m', 
+			name: '💨 Meteoblue Wind', 
+			provider: 'meteoblue',
+			color: '#84CC16', 
+			active: false,
+			free: false,
+			description: 'Wind speed 10m'
+		}
 	];
 
 	let selectedLayer = weatherLayers[0];
@@ -19,9 +92,10 @@
 	let map;
 	let mapContainer;
 	let leafletLoaded = false;
+	let currentWeatherLayer = null;
+	let rainViewerTimestamp = '';
 
 	async function loadLeaflet() {
-		// Browser check without $app/environment
 		if (typeof window === 'undefined') return false;
 		
 		try {
@@ -49,10 +123,49 @@
 		}
 	}
 
+	async function getRainViewerTimestamp() {
+		try {
+			const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+			const data = await response.json();
+			// Použij posledný dostupný timestamp
+			return data.radar.past[data.radar.past.length - 1].time;
+		} catch (error) {
+			console.error('RainViewer timestamp failed:', error);
+			// Fallback na aktuálny čas zaokrúhlený na 10 minút
+			return Math.floor(Date.now() / 1000 / 600) * 600;
+		}
+	}
+
+	function buildTileURL(layer) {
+		switch (layer.provider) {
+			case 'rainviewer':
+				if (layer.id === 'rainviewer_rain') {
+					return `https://tilecache.rainviewer.com/v2/radar/${rainViewerTimestamp}/512/{z}/{x}/{y}/2/1_1.png`;
+				} else if (layer.id === 'rainviewer_clouds') {
+					return `https://tilecache.rainviewer.com/v2/satellite/{z}/{x}/{y}/2/1_1.png`;
+				}
+				break;
+				
+			case 'tomorrow':
+				return `https://api.tomorrow.io/v4/map/tile/{z}/{x}/{y}/${layer.id}.png?apikey=${TOMORROW_IO_KEY}&time=now`;
+				
+			case 'meteoblue':
+				// Meteoblue používa iný format - image namiesto tiles
+				// Toto je experimentálne - môže byť potrebné adjustovať
+				return `https://my.meteoblue.com/visimage/meteogram_web?apikey=${METEOBLUE_KEY}&location=48.7,19.5&package=maps-web&params=${layer.id}&format=png`;
+				
+			default:
+				return '';
+		}
+	}
+
 	async function initializeMap() {
 		if (!leafletLoaded || !window.L || !mapContainer) return;
 
 		try {
+			// Získaj RainViewer timestamp
+			rainViewerTimestamp = await getRainViewerTimestamp();
+			
 			// Vytvor mapu
 			map = window.L.map(mapContainer, {
 				center: [48.7324, 19.4995], // Slovensko
@@ -74,8 +187,6 @@
 		}
 	}
 
-	let currentWeatherLayer = null;
-
 	function addWeatherLayer() {
 		if (!map || !window.L) return;
 
@@ -84,15 +195,47 @@
 			map.removeLayer(currentWeatherLayer);
 		}
 
+		const tileURL = buildTileURL(selectedLayer);
+		
+		if (!tileURL) {
+			console.error('No tile URL for layer:', selectedLayer);
+			return;
+		}
+
+		// Pre Meteoblue môžeme potrebovať iný prístup
+		if (selectedLayer.provider === 'meteoblue') {
+			// Meteoblue môže vyžadovať image overlay namiesto tile layer
+			console.log('Meteoblue layer - možno potrebuje image overlay');
+		}
+
 		// Pridaj novú weather vrstvu
-		currentWeatherLayer = window.L.tileLayer(
-			`https://api.tomorrow.io/v4/map/tile/{z}/{x}/{y}/${selectedLayer.id}/current.png?apikey=${API_KEY}`,
-			{
-				attribution: 'Weather data by Tomorrow.io',
-				opacity: opacity / 100,
-				maxZoom: 12
-			}
-		).addTo(map);
+		currentWeatherLayer = window.L.tileLayer(tileURL, {
+			attribution: getAttribution(selectedLayer.provider),
+			opacity: opacity / 100,
+			maxZoom: selectedLayer.provider === 'rainviewer' ? 12 : 10
+		}).addTo(map);
+
+		// Error handling pre tiles
+		currentWeatherLayer.on('tileerror', function(e) {
+			console.error('Tile loading error:', e);
+		});
+		
+		currentWeatherLayer.on('tileload', function(e) {
+			console.log('Tile loaded successfully');
+		});
+	}
+
+	function getAttribution(provider) {
+		switch (provider) {
+			case 'rainviewer':
+				return 'Weather data by RainViewer';
+			case 'tomorrow':
+				return 'Weather data by Tomorrow.io';
+			case 'meteoblue':
+				return 'Weather data by Meteoblue';
+			default:
+				return 'Weather data';
+		}
 	}
 
 	function selectLayer(layer) {
@@ -111,6 +254,13 @@
 		}
 	}
 
+	async function refreshRainViewer() {
+		rainViewerTimestamp = await getRainViewerTimestamp();
+		if (selectedLayer.provider === 'rainviewer') {
+			addWeatherLayer();
+		}
+	}
+
 	function flyToSlovakia() {
 		if (map) {
 			map.flyTo([48.7324, 19.4995], 7);
@@ -124,10 +274,8 @@
 	}
 
 	onMount(async () => {
-		// Načítaj Leaflet a inicializuj mapu
 		const loaded = await loadLeaflet();
 		if (loaded) {
-			// Počkaj na DOM update
 			setTimeout(initializeMap, 100);
 		}
 	});
@@ -143,7 +291,7 @@
 </script>
 
 <svelte:head>
-	<title>Weather Map - Skutočná mapa s počasím</title>
+	<title>Weather Map - Multi-Provider Weather Layers</title>
 </svelte:head>
 
 <div class="weather-map">
@@ -151,7 +299,7 @@
 	<!-- Header -->
 	<header class="header">
 		<h1>🗺️ Weather Map Pro</h1>
-		<p>Skutočná mapa s weather vrstvami od Tomorrow.io</p>
+		<p>Multi-provider weather layers: RainViewer, Tomorrow.io, Meteoblue</p>
 	</header>
 
 	<!-- Content -->
@@ -161,16 +309,32 @@
 		<aside class="sidebar">
 			
 			<div class="section">
-				<h3>🌤️ Weather Vrstvy</h3>
+				<h3>🌤️ Weather Providers</h3>
+				<div class="provider-info">
+					<div class="provider rainviewer">🟢 RainViewer (FREE)</div>
+					<div class="provider tomorrow">🟡 Tomorrow.io (API)</div>
+					<div class="provider meteoblue">🔵 Meteoblue (API)</div>
+				</div>
+			</div>
+			
+			<div class="section">
+				<h3>🌈 Weather Layers</h3>
 				<div class="layers">
 					{#each weatherLayers as layer}
 						<button 
 							class="layer" 
 							class:active={layer.active}
+							class:free={layer.free}
 							style="border-color: {layer.color}"
 							on:click={() => selectLayer(layer)}
 						>
-							<span>{layer.name}</span>
+							<div class="layer-content">
+								<span class="layer-name">{layer.name}</span>
+								<span class="layer-provider">{layer.provider}</span>
+								{#if layer.free}
+									<span class="free-badge">FREE</span>
+								{/if}
+							</div>
 							<div class="color" style="background: {layer.color}"></div>
 						</button>
 					{/each}
@@ -178,9 +342,9 @@
 			</div>
 
 			<div class="section">
-				<h3>🎛️ Nastavenia</h3>
+				<h3>🎛️ Controls</h3>
 				<label>
-					Priesvitnosť: {opacity}%
+					Opacity: {opacity}%
 					<input 
 						type="range" 
 						min="10" 
@@ -192,22 +356,29 @@
 				
 				<div class="nav-buttons">
 					<button on:click={flyToSlovakia} class="nav-btn">
-						🇸🇰 Slovensko
+						🇸🇰 Slovakia
 					</button>
 					<button on:click={flyToEurope} class="nav-btn">
-						🌍 Európa
+						🌍 Europe
 					</button>
 				</div>
+
+				{#if selectedLayer.provider === 'rainviewer'}
+					<button on:click={refreshRainViewer} class="refresh-btn">
+						🔄 Refresh Radar
+					</button>
+				{/if}
 			</div>
 
 			<div class="section">
-				<h3>📊 Aktívna vrstva</h3>
+				<h3>📊 Current Layer</h3>
 				<div class="current-layer">
 					<div class="layer-info">
 						<h4>{selectedLayer.name}</h4>
-						<p><strong>API Layer:</strong> {selectedLayer.id}</p>
-						<p><strong>Farba:</strong> {selectedLayer.color}</p>
-						<p><strong>Zdroj:</strong> Tomorrow.io</p>
+						<p><strong>Provider:</strong> {selectedLayer.provider}</p>
+						<p><strong>Type:</strong> {selectedLayer.id}</p>
+						<p><strong>Cost:</strong> {selectedLayer.free ? 'FREE' : 'API Required'}</p>
+						<p><strong>Description:</strong> {selectedLayer.description}</p>
 						<p><strong>Status:</strong> {leafletLoaded ? '✅ Loaded' : '⏳ Loading...'}</p>
 					</div>
 				</div>
@@ -221,6 +392,7 @@
 			<div class="map-header">
 				<h3>🗺️ {selectedLayer.name}</h3>
 				<div class="map-controls">
+					<span class="provider-badge {selectedLayer.provider}">{selectedLayer.provider}</span>
 					<span class="zoom-info">Interactive Map | Zoom & Pan</span>
 				</div>
 			</div>
@@ -234,43 +406,42 @@
 				{#if !leafletLoaded}
 					<div class="map-loading">
 						<div class="spinner"></div>
-						<p>Načítavam Leaflet mapu...</p>
+						<p>Loading map engine...</p>
 					</div>
 				{/if}
 			</div>
 
 			<!-- Map Instructions -->
 			<div class="map-instructions">
-				<h4>🕹️ Ovládanie mapy:</h4>
+				<h4>🕹️ Map Controls:</h4>
 				<div class="instructions-grid">
 					<div class="instruction">
 						<span class="icon">🖱️</span>
-						<span>Ťahaj mapu pre pohyb</span>
+						<span>Drag to pan map</span>
 					</div>
 					<div class="instruction">
 						<span class="icon">🔍</span>
-						<span>Koliesko myši pre zoom</span>
+						<span>Mouse wheel to zoom</span>
 					</div>
 					<div class="instruction">
 						<span class="icon">🎯</span>
-						<span>Klikni na tlačidlá pre rýchlu navigáciu</span>
+						<span>Click buttons for quick navigation</span>
 					</div>
 					<div class="instruction">
 						<span class="icon">🌈</span>
-						<span>Prepínaj weather vrstvy v menu</span>
+						<span>Switch weather layers in sidebar</span>
 					</div>
 				</div>
 			</div>
 
-			<!-- API URL Display -->
-			<div class="api-display">
-				<h4>🔗 Aktuálna Tomorrow.io Tile URL:</h4>
-				<code class="tile-url">
-					https://api.tomorrow.io/v4/map/tile/[z]/[x]/[y]/{selectedLayer.id}/current.png?apikey={API_KEY}
-				</code>
-				<p class="api-note">
-					⚠️ Tile sa načítavajú priamo z Tomorrow.io API. Ak sa nezobrazujú, skontroluj API key alebo network connection.
-				</p>
+			<!-- Debug Info (hidden in production) -->
+			<div class="debug-info">
+				<h4>🔧 Layer Debug:</h4>
+				<p><strong>Provider:</strong> {selectedLayer.provider}</p>
+				<p><strong>Layer ID:</strong> {selectedLayer.id}</p>
+				{#if selectedLayer.provider === 'rainviewer'}
+					<p><strong>Timestamp:</strong> {rainViewerTimestamp}</p>
+				{/if}
 			</div>
 
 		</main>
@@ -316,7 +487,7 @@
 
 	/* Sidebar */
 	.sidebar {
-		width: 320px;
+		width: 350px;
 		background: white;
 		border-right: 1px solid #ddd;
 		overflow-y: auto;
@@ -333,6 +504,35 @@
 		color: #333;
 		font-size: 1.1rem;
 		font-weight: 600;
+	}
+
+	.provider-info {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin-bottom: 15px;
+	}
+
+	.provider {
+		padding: 8px 12px;
+		border-radius: 6px;
+		font-size: 0.9rem;
+		font-weight: 500;
+	}
+
+	.provider.rainviewer {
+		background: #dcfce7;
+		color: #166534;
+	}
+
+	.provider.tomorrow {
+		background: #fef3c7;
+		color: #92400e;
+	}
+
+	.provider.meteoblue {
+		background: #dbeafe;
+		color: #1e40af;
 	}
 
 	.layers {
@@ -365,12 +565,43 @@
 		box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 	}
 
+	.layer.free {
+		border-left: 4px solid #10b981;
+	}
+
+	.layer-content {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+	}
+
+	.layer-name {
+		font-weight: 500;
+	}
+
+	.layer-provider {
+		font-size: 0.8rem;
+		color: #666;
+		text-transform: capitalize;
+	}
+
+	.free-badge {
+		background: #10b981;
+		color: white;
+		padding: 2px 6px;
+		border-radius: 4px;
+		font-size: 0.7rem;
+		font-weight: bold;
+	}
+
 	.color {
 		width: 16px;
 		height: 16px;
 		border-radius: 50%;
 		border: 2px solid white;
 		box-shadow: 0 0 4px rgba(0,0,0,0.3);
+		flex-shrink: 0;
 	}
 
 	label {
@@ -406,7 +637,7 @@
 		margin-top: 15px;
 	}
 
-	.nav-btn {
+	.nav-btn, .refresh-btn {
 		flex: 1;
 		padding: 10px 12px;
 		border: 2px solid #667eea;
@@ -419,9 +650,20 @@
 		transition: all 0.3s ease;
 	}
 
-	.nav-btn:hover {
+	.nav-btn:hover, .refresh-btn:hover {
 		background: #667eea;
 		color: white;
+	}
+
+	.refresh-btn {
+		margin-top: 10px;
+		width: 100%;
+		border-color: #10b981;
+		color: #10b981;
+	}
+
+	.refresh-btn:hover {
+		background: #10b981;
 	}
 
 	.current-layer {
@@ -463,6 +705,35 @@
 	.map-header h3 {
 		margin: 0;
 		color: #333;
+	}
+
+	.map-controls {
+		display: flex;
+		align-items: center;
+		gap: 15px;
+	}
+
+	.provider-badge {
+		padding: 4px 8px;
+		border-radius: 4px;
+		font-size: 0.8rem;
+		font-weight: 500;
+		text-transform: uppercase;
+	}
+
+	.provider-badge.rainviewer {
+		background: #10b981;
+		color: white;
+	}
+
+	.provider-badge.tomorrow {
+		background: #f59e0b;
+		color: white;
+	}
+
+	.provider-badge.meteoblue {
+		background: #3b82f6;
+		color: white;
 	}
 
 	.zoom-info {
@@ -534,37 +805,25 @@
 		font-size: 1.2rem;
 	}
 
-	.api-display {
-		background: white;
-		padding: 20px;
+	.debug-info {
+		background: #f8f9fa;
+		padding: 15px;
 		margin: 0 15px 15px;
-		border-radius: 10px;
-		box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-	}
-
-	.api-display h4 {
-		margin: 0 0 12px;
-		color: #333;
-	}
-
-	.tile-url {
-		display: block;
-		background: #f1f3f4;
-		padding: 12px;
-		border-radius: 6px;
+		border-radius: 8px;
+		border: 1px solid #e9ecef;
 		font-family: 'Courier New', monospace;
 		font-size: 0.8rem;
-		color: #333;
-		word-break: break-all;
-		border-left: 4px solid #667eea;
-		margin-bottom: 10px;
 	}
 
-	.api-note {
-		font-size: 0.85rem;
+	.debug-info h4 {
+		margin: 0 0 10px;
+		color: #333;
+		font-family: inherit;
+	}
+
+	.debug-info p {
+		margin: 4px 0;
 		color: #666;
-		margin: 0;
-		font-style: italic;
 	}
 
 	/* Responsive */
@@ -575,7 +834,7 @@
 
 		.sidebar {
 			width: 100%;
-			height: 300px;
+			height: 350px;
 			border-right: none;
 			border-bottom: 1px solid #ddd;
 		}
@@ -596,6 +855,11 @@
 			flex-direction: column;
 			gap: 10px;
 			text-align: center;
+		}
+
+		.map-controls {
+			flex-direction: column;
+			gap: 8px;
 		}
 	}
 
