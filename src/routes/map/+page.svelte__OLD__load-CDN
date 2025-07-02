@@ -1,0 +1,248 @@
+<script>
+	import { onMount } from 'svelte';
+	import * as maptilersdk from '@maptiler/sdk';
+    import * as maptilerweather from '@maptiler/weather';
+
+	const sdk = maptilersdk;
+	const weather = maptilerweather;
+
+	let map;
+	let activeLayer = null;
+	let isPlaying = false;
+	let pointerLngLat = null;
+	let currentTime = null;
+	let timeSlider, timeText, playPauseButton;
+
+	const weatherLayers = {
+		precipitation: { layer: null, value: "value", units: " mm" },
+		pressure: { layer: null, value: "value", units: " hPa" },
+		radar: { layer: null, value: "value", units: " dBZ" },
+		temperature: { layer: null, value: "value", units: "°" },
+		wind: { layer: null, value: "speedMetersPerSecond", units: " m/s" },
+	};
+
+	onMount(() => {
+		// Load external scripts dynamically
+		Promise.all([
+			loadScript('https://cdn.maptiler.com/maptiler-sdk-js/v3.2.0/maptiler-sdk.umd.min.js'),
+			loadScript('https://cdn.maptiler.com/maptiler-weather/v3.0.1/maptiler-weather.umd.min.js'),
+			loadCSS('https://cdn.maptiler.com/maptiler-sdk-js/v3.2.0/maptiler-sdk.css')
+		]).then(() => {
+			initMap();
+		});
+	});
+
+	function loadScript(src) {
+		return new Promise((resolve) => {
+			const script = document.createElement('script');
+			script.src = src;
+			script.onload = resolve;
+			document.head.appendChild(script);
+		});
+	}
+
+	function loadCSS(href) {
+		return new Promise((resolve) => {
+			const link = document.createElement('link');
+			link.href = href;
+			link.rel = 'stylesheet';
+			link.onload = resolve;
+			document.head.appendChild(link);
+		});
+	}
+
+	function initMap() {
+		const sdk = window.maptilersdk;
+		const weather = window.maptilerweather;
+
+		sdk.config.apiKey = "ry26WCBx6tt715jhxPwh";
+
+		map = new sdk.Map({
+			container: 'map',
+			style: sdk.MapStyle.BACKDROP,
+			zoom: 7,
+			center: [19.5, 48.7],
+			hash: true,
+			projection: 'globe',
+		});
+
+		map.on('load', () => {
+			map.setPaintProperty("Water", 'fill-color', "rgba(0, 0, 0, 0.4)");
+			changeWeatherLayer("wind");
+		});
+
+		map.on('mousemove', (e) => updatePointerValue(e.lngLat));
+		map.on('mouseout', () => (pointerLngLat = null));
+	}
+
+	function changeWeatherLayer(type) {
+		const sdk = window.maptilersdk;
+		const weather = window.maptilerweather;
+
+		if (activeLayer && map.getLayer(activeLayer)) {
+			map.setLayoutProperty(activeLayer, 'visibility', 'none');
+		}
+
+		activeLayer = type;
+
+		let layer = weatherLayers[type].layer;
+		if (!layer) {
+			switch (type) {
+				case 'precipitation': layer = new weather.PrecipitationLayer({ id: type }); break;
+				case 'pressure': layer = new weather.PressureLayer({ id: type }); break;
+				case 'radar': layer = new weather.RadarLayer({ id: type }); break;
+				case 'temperature': layer = new weather.TemperatureLayer({ id: type }); break;
+				case 'wind': layer = new weather.WindLayer({ id: type }); break;
+			}
+
+			layer.on("tick", refreshTime);
+			layer.on("animationTimeSet", refreshTime);
+			layer.on("sourceReady", () => {
+				const startDate = layer.getAnimationStartDate();
+				const endDate = layer.getAnimationEndDate();
+				timeSlider.min = +startDate;
+				timeSlider.max = +endDate;
+				timeSlider.value = +layer.getAnimationTimeDate();
+				if (currentTime) layer.setAnimationTime(currentTime);
+			});
+
+			weatherLayers[type].layer = layer;
+			map.addLayer(layer, "Water");
+		} else {
+			map.setLayoutProperty(type, 'visibility', 'visible');
+		}
+
+		refreshTime();
+		if (isPlaying) playAnimation(layer);
+		else pauseAnimation(layer);
+	}
+
+	function playAnimation(layer) {
+		layer.animateByFactor(3600);
+		playPauseButton.innerText = "Pause";
+		isPlaying = true;
+	}
+
+	function pauseAnimation(layer) {
+		layer.animateByFactor(0);
+		playPauseButton.innerText = "Play 3600x";
+		isPlaying = false;
+	}
+
+	function updatePointerValue(lngLat) {
+		if (!lngLat) return;
+		pointerLngLat = lngLat;
+		const layer = weatherLayers[activeLayer]?.layer;
+		const valueKey = weatherLayers[activeLayer]?.value;
+		const units = weatherLayers[activeLayer]?.units;
+		const value = layer?.pickAt(lngLat.lng, lngLat.lat);
+		if (value) {
+			document.getElementById('pointer-data').innerText = `${value[valueKey].toFixed(1)}${units}`;
+		}
+	}
+
+	function refreshTime() {
+		const layer = weatherLayers[activeLayer]?.layer;
+		if (layer) {
+			const d = layer.getAnimationTimeDate();
+			timeText.innerText = d.toString();
+			timeSlider.value = +d;
+		}
+	}
+
+	// Search input
+	let searchText = '';
+	let locationResults = [];
+	let searchMarker = null;
+
+	async function searchLocation() {
+		if (!searchText || searchText.length < 2) return;
+
+		const query = encodeURIComponent(searchText);
+		// const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=sk&q=${query}`); // Only search in Slovakia
+		const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=10&q=${query}`);
+
+		locationResults = await res.json();
+	}
+
+	function selectPlace(place) {
+	if (!map) {
+		console.warn("Map is not initialized yet");
+		return;
+	}
+
+	const lng = parseFloat(place.lon);
+	const lat = parseFloat(place.lat);
+
+	if (searchMarker) searchMarker.remove();
+
+	// Získaj čistú MapLibre mapu
+	const maplibre = map.getMaplibreMap();
+
+	// Vytvor marker pomocou MapLibre, nie maptiler
+	searchMarker = new maplibregl.Marker({ color: "red" })
+		.setLngLat([lng, lat])
+		.setPopup(new maplibregl.Popup().setText(place.display_name))
+		.addTo(maplibre) // <- pridaj na MapLibre mapu
+		.togglePopup();
+
+	map.flyTo({ center: [lng, lat], zoom: 10 });
+
+	locationResults = [];
+	searchText = place.display_name;
+
+	pointerLngLat = { lng, lat };
+	updatePointerValue(pointerLngLat);
+}
+
+
+</script>
+
+<style>
+  #map { position: absolute; left:0; top: 0; bottom: 0; width: 100vw; }
+  #pointer-data, #variable-name, #time-info { z-index: 10; position: fixed; color: white; text-shadow: 0 0 5px black; }
+  #buttons { position: absolute; top: 50px; left: 10px; z-index: 11; }
+
+  .maplibregl-marker {
+	z-index: 9999 !important;
+}
+
+</style>
+
+<div id="map"></div>
+
+<div id="buttons">
+  <button on:click={() => changeWeatherLayer('precipitation')}>Precipitation</button>
+  <button on:click={() => changeWeatherLayer('pressure')}>Pressure</button>
+  <button on:click={() => changeWeatherLayer('radar')}>Radar</button>
+  <button on:click={() => changeWeatherLayer('temperature')}>Temperature</button>
+  <button on:click={() => changeWeatherLayer('wind')}>Wind</button>
+</div>
+
+<div style="z-index: 11;">
+	<input type="text" bind:value={searchText} placeholder="Zadaj miesto…" style="margin-bottom:5px; width: 200px;" />
+	<button on:click={searchLocation}>Search</button>
+
+	{#if locationResults.length > 0}
+	<ul style="background: white; color: black; padding: 5px; border: 1px solid #ccc; max-width: 300px; font-size: 14px;">
+		{#each locationResults as place}
+		<li style="cursor: pointer; padding: 4px;" on:click={() => selectPlace(place)}>
+			{place.display_name}
+		</li>
+		{/each}
+	</ul>
+	{/if}
+
+</div>
+
+<div id="pointer-data"></div>
+<div id="variable-name">{activeLayer}</div>
+
+<div id="time-info">
+  <span bind:this={timeText}></span>
+  <button bind:this={playPauseButton} on:click={() => {
+    const layer = weatherLayers[activeLayer]?.layer;
+    if (layer) isPlaying ? pauseAnimation(layer) : playAnimation(layer);
+  }}>Play 3600x</button>
+  <input bind:this={timeSlider} type="range" min="0" max="10" step="1" />
+</div>

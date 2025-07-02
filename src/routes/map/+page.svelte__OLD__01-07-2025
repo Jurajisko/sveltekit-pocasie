@@ -1,0 +1,655 @@
+<!-- src/routes/map/+page.svelte -->
+<!-- 
+=============================================================================
+WEATHER RADAR MAPA - KOMPLETNE OKOMENTOVANÝ KÓD PRE UČENIE
+=============================================================================
+Tento súbor vytvára interaktívnu mapu s animovaným weather radarom.
+Použité technológie:
+- SvelteKit (frontend framework)
+- Leaflet.js (mapa bez API key)  
+- OpenStreetMap (free map tiles)
+- RainViewer API (radar dáta)
+=============================================================================
+-->
+
+<script>
+	// ==========================================================================
+	// 1. IMPORTS A REACTIVE VARIABLES
+	// ==========================================================================
+	
+	// onMount = Svelte lifecycle hook - spustí sa keď sa component pripojí do DOM
+	import { onMount } from 'svelte';
+	
+	// Reactive variables = automaticky sa re-renderuje UI keď sa zmenia
+	let mapContainer;        // HTML element kde sa vytvorí mapa
+	let map;                 // Leaflet map instance (hlavný objekt mapy)
+	let radarTimestamps = [];// Array všetkých dostupných radar snímok
+	let currentFrame = 0;    // Index aktuálne zobrazenej snímky
+	let isAnimating = false; // Boolean - beží animácia?
+	let animationInterval;   // Interval ID pre animáciu (na zastavenie)
+	let mapLoaded = false;   // Boolean - je mapa načítaná?
+
+	// ==========================================================================
+	// 2. NAČÍTANIE LEAFLET KNIŽNICE DYNAMICKY
+	// ==========================================================================
+	
+	/**
+	 * loadLeaflet() - Načíta Leaflet.js knižnicu do stránky
+	 * 
+	 * PREČO DYNAMICKY?
+	 * - SvelteKit je SSR (Server Side Rendering)
+	 * - Leaflet potrebuje window objekt (len v browseri)
+	 * - Dynamické načítanie = bezpečné pre SSR
+	 */
+	async function loadLeaflet() {
+		console.log('🔄 Začínam načítavať Leaflet knižnicu...');
+		
+		// KROK 1: Načítanie CSS štýlov pre Leaflet
+		// Bez CSS by mapa vyzerala rozbitá (žiadne ikonky, tlačidlá)
+		const cssLink = document.createElement('link');
+		cssLink.rel = 'stylesheet';  // Typ: CSS stylesheet
+		cssLink.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+		document.head.appendChild(cssLink); // Pridanie do <head>
+		
+		console.log('✅ Leaflet CSS načítané');
+
+		// KROK 2: Načítanie JavaScript kódu Leaflet
+		const script = document.createElement('script');
+		script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+		
+		// PROMISE pattern - čakáme kým sa script načíta
+		return new Promise((resolve) => {
+			script.onload = () => {
+				console.log('✅ Leaflet JavaScript načítaný');
+				// window.L je teraz dostupné (hlavný Leaflet objekt)
+				resolve();
+			};
+			document.head.appendChild(script); // Pridanie scriptu do <head>
+		});
+	}
+
+	// ==========================================================================
+	// 3. ZÍSKANIE RADAR DÁTA Z RAINVIEWER API
+	// ==========================================================================
+	
+	/**
+	 * getRainViewerData() - Stiahne zoznam dostupných radar snímok
+	 * 
+	 * RAINVIEWER API:
+	 * - Free weather radar dáta
+	 * - Poskytuje timestamps a paths pre radar tiles
+	 * - Má past frames (minulosť) a nowcast (predpoveď)
+	 */
+	async function getRainViewerData() {
+		try {
+			console.log('🌧️ Získavam radar dáta z RainViewer API...');
+			
+			// CORS PROXY PROBLÉM A RIEŠENIE:
+			// RainViewer API má CORS policy - nedá sa volať priamo z browsera
+			// allorigins.win = CORS proxy service (obchádza CORS)
+			const proxyUrl = 'https://api.allorigins.win/get?url=';
+			const targetUrl = encodeURIComponent('https://api.rainviewer.com/public/weather-maps.json');
+			
+			// Fetch cez proxy
+			const response = await fetch(proxyUrl + targetUrl);
+			const proxyData = await response.json();
+			
+			// Proxy vráti {contents: "actual data"} - musíme parsovať
+			const data = JSON.parse(proxyData.contents);
+			
+			// ŠTRUKTÚRA RAINVIEWER API RESPONSE:
+			// {
+			//   radar: {
+			//     past: [{time: 1234567890, path: "/path/to/image"}, ...],
+			//     nowcast: [{time: 1234567890, path: "/path/to/image"}, ...]
+			//   }
+			// }
+			
+			const pastFrames = data.radar.past || [];      // Minulosť (reálne merania)
+			const nowcastFrames = data.radar.nowcast || []; // Budúcnosť (predpoveď)
+			
+			// Spojenie past + nowcast = kompletná animácia
+			radarTimestamps = [...pastFrames, ...nowcastFrames];
+			
+			// Štart s poslednou snímkou (najnovšie dáta)
+			currentFrame = radarTimestamps.length - 1;
+			
+			console.log(`✅ Získané ${radarTimestamps.length} radar snímok`);
+			console.log(`📅 Časový rozsah: ${pastFrames.length} past + ${nowcastFrames.length} nowcast`);
+			
+		} catch (error) {
+			console.error('❌ Chyba pri získavaní radar dát:', error);
+			// Graceful error handling - app funguje aj bez radaru
+		}
+	}
+
+	// ==========================================================================
+	// 4. INICIALIZÁCIA LEAFLET MAPY
+	// ==========================================================================
+	
+	/**
+	 * initMap() - Vytvorí Leaflet mapu a pripojí ju k DOM elementu
+	 * 
+	 * LEAFLET ZÁKLADY:
+	 * - L.map() = vytvorí mapu v danom HTML elemente
+	 * - L.tileLayer() = pridá map tiles (obrázky mapy)
+	 * - setView() = nastaví pozíciu a zoom
+	 */
+	async function initMap() {
+		// Kontrola či je Leaflet načítaný
+		if (!window.L) {
+			console.error('❌ Leaflet nie je načítaný!');
+			return;
+		}
+
+		console.log('🗺️ Inicializujem Leaflet mapu...');
+
+		// VYTVORENIE MAPY:
+		// - mapContainer = HTML div element (bind:this={mapContainer})
+		// - [48.7, 19.5] = súradnice Slovenska (latitude, longitude)
+		// - 6 = zoom level (1=celý svet, 18=ulice)
+		map = window.L.map(mapContainer).setView([48.7, 19.5], 6);
+
+		// PRIDANIE MAP TILES:
+		// Tiles = malé obrázky (256x256px) ktoré sa skladajú do mapy
+		// OpenStreetMap = free, open source map tiles
+		// {s} = server (a,b,c), {z} = zoom, {x},{y} = tile coordinates
+		window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+			attribution: '© OpenStreetMap contributors' // Povinné pre OSM
+		}).addTo(map);
+
+		mapLoaded = true;
+		console.log('✅ Mapa úspešne vytvorená');
+
+		// Po načítaní mapy získaj radar dáta
+		await getRainViewerData();
+		
+		// Ak máme radar dáta, zobraz prvú snímku
+		if (radarTimestamps.length > 0) {
+			showRadarFrame(currentFrame);
+		}
+	}
+
+	// ==========================================================================
+	// 5. ZOBRAZENIE RADAR SNÍMKY NA MAPE
+	// ==========================================================================
+	
+	// Globálna premenná pre aktuálny radar layer
+	let radarLayer = null;
+
+	/**
+	 * showRadarFrame() - Zobrazí konkrétnu radar snímku na mape
+	 * 
+	 * @param {number} frameIndex - Index snímky v radarTimestamps array
+	 * 
+	 * PRINCÍP RADAR OVERLAY:
+	 * - Radar dáta = PNG obrázky s transparentnosťou
+	 * - Prekrývajú sa cez základnú mapu
+	 * - Farebné = dážď, transparentné = žiadny dážď
+	 */
+	function showRadarFrame(frameIndex) {
+		// Validácia vstupu
+		if (!radarTimestamps[frameIndex] || !map) {
+			console.warn('⚠️ Neplatný frame index alebo mapa nie je pripravená');
+			return;
+		}
+		
+		const frame = radarTimestamps[frameIndex];
+		console.log(`🎬 Zobrazujem radar frame ${frameIndex + 1}/${radarTimestamps.length}`);
+		
+		// ODSTRÁNENIE PREDCHÁDZAJÚCEHO RADAR LAYERA:
+		// Vždy odstraníme starý layer pred pridaním nového
+		// (inak by sa prekrývali a spomaľovali by mapu)
+		if (radarLayer) {
+			map.removeLayer(radarLayer);
+			radarLayer = null;
+		}
+
+		// VYTVORENIE RADAR TILE URL:
+		// RainViewer poskytuje radar dáta ako tile server
+		// Format: https://tilecache.rainviewer.com/v2/radar/{timestamp}/512/{z}/{x}/{y}/{color}/{smooth}_{snow}.png
+		// - {timestamp} = Unix timestamp snímky
+		// - 512 = tile size (512x512px)
+		// - {z}/{x}/{y} = štandardné tile coordinates
+		// - 4 = color scheme (4 = universal rainbow)
+		// - 1_1 = smooth_snow (1=smooth, 1=include snow)
+		const radarUrl = `https://tilecache.rainviewer.com/v2/radar/${frame.time}/512/{z}/{x}/{y}/4/1_1.png`;
+		
+		// VYTVORENIE NOVÉHO RADAR LAYERA:
+		radarLayer = window.L.tileLayer(radarUrl, {
+			opacity: 0.7,                    // 70% transparentnosť
+			attribution: '© RainViewer',     // Povinné označenie zdroja
+			maxZoom: 14,                     // Max zoom level pre radar
+			zIndex: 1000                     // Radar má byť nad základnou mapou
+		}).addTo(map);
+
+		console.log(`✅ Radar frame zobrazený: ${new Date(frame.time * 1000).toLocaleTimeString()}`);
+	}
+
+	// ==========================================================================
+	// 6. ANIMÁCIA RADAR SNÍMOK
+	// ==========================================================================
+	
+	/**
+	 * toggleAnimation() - Zapne/vypne automatickú animáciu radaru
+	 * 
+	 * PRINCÍP ANIMÁCIE:
+	 * - setInterval() mení currentFrame každých 500ms
+	 * - currentFrame sa cyklicky pohybuje 0 → max → 0
+	 * - showRadarFrame() sa volá pri každej zmene
+	 */
+	function toggleAnimation() {
+		if (isAnimating) {
+			// ZASTAVENIE ANIMÁCIE:
+			clearInterval(animationInterval); // Zruší interval
+			animationInterval = null;
+			isAnimating = false;
+			console.log('⏸️ Animácia zastavená');
+		} else {
+			// KONTROLA ČI MÁME DÁTA:
+			if (radarTimestamps.length === 0) {
+				console.warn('⚠️ Žiadne radar dáta na animáciu');
+				return;
+			}
+			
+			// SPUSTENIE ANIMÁCIE:
+			isAnimating = true;
+			console.log('▶️ Animácia spustená');
+			
+			// setInterval = opakuje funkciu každých 500ms
+			animationInterval = setInterval(() => {
+				// CYKLICKÝ POHYB: 0,1,2,...,max,0,1,2,...
+				// % = modulo operátor (zvyšok po delení)
+				currentFrame = (currentFrame + 1) % radarTimestamps.length;
+				showRadarFrame(currentFrame);
+			}, 500); // 500ms = 0.5 sekundy medzi snímkami
+		}
+	}
+
+	// ==========================================================================
+	// 7. MANUÁLNE OVLÁDANIE TIMELINE
+	// ==========================================================================
+	
+	/**
+	 * goToFrame() - Preskoč na konkrétnu radar snímku
+	 * 
+	 * @param {number} frameIndex - Index snímky kam skočiť
+	 * 
+	 * POUŽITIE: timeline slider - používateľ posúva slider
+	 */
+	function goToFrame(frameIndex) {
+		// Zastav animáciu ak beží (manuálne ovládanie má prioritu)
+		if (isAnimating) {
+			toggleAnimation();
+		}
+		
+		// Nastav nový frame a zobraz ho
+		currentFrame = frameIndex;
+		showRadarFrame(currentFrame);
+		
+		console.log(`🎯 Manuálny preskok na frame ${frameIndex + 1}/${radarTimestamps.length}`);
+	}
+
+	// ==========================================================================
+	// 8. LIFECYCLE - SPUSTENIE PO NAČÍTANÍ KOMPONENTY
+	// ==========================================================================
+	
+	/**
+	 * onMount() - Svelte lifecycle hook
+	 * 
+	 * Spustí sa keď sa component pripojí do DOM
+	 * = ako window.onload ale pre Svelte komponent
+	 */
+	onMount(async () => {
+		console.log('🚀 Component mounted - začínam inicializáciu...');
+		
+		try {
+			// POSTUPNOSŤ INICIALIZÁCIE:
+			// 1. Načítaj Leaflet knižnicu
+			await loadLeaflet();
+			
+			// 2. Vytvor mapu (ktorá automaticky získa radar dáta)
+			await initMap();
+			
+			console.log('🎉 Inicializácia dokončená úspešne!');
+			
+		} catch (error) {
+			console.error('💥 Chyba pri inicializácii:', error);
+		}
+	});
+</script>
+
+<!-- 
+=============================================================================
+HTML TEMPLATE - VIZUÁLNA ŠTRUKTÚRA KOMPONENTY
+=============================================================================
+Svelte používa špeciálnu syntax:
+- {expression} = JavaScript výraz v HTML
+- on:event = event handler  
+- bind:this = referencia na DOM element
+- {#if condition} = podmienené renderovanie
+=============================================================================
+-->
+
+<!-- HLAVIČKY -->
+<h1>🌧️ Weather Radar</h1>
+<p class="subtitle">Real-time animovaný radar pre Slovensko a okolie</p>
+
+<!-- STATUS PANEL - zobrazuje stav načítania -->
+<div class="status">
+	<h3>📊 Status systému</h3>
+	
+	<!-- bind: = reactive binding, zmena mapLoaded automaticky updatne UI -->
+	<p><strong>Mapa:</strong> {mapLoaded ? '✅ Načítaná' : '⏳ Načítavam...'}</p>
+	
+	<!-- {#if} = podmienené renderovanie, zobrazí sa len ak je condition true -->
+	{#if radarTimestamps.length > 0}
+		<p><strong>Radar snímky:</strong> {radarTimestamps.length} dostupných</p>
+		<p><strong>Aktuálna snímka:</strong> {currentFrame + 1}/{radarTimestamps.length}</p>
+		<p><strong>Čas snímky:</strong> {new Date(radarTimestamps[currentFrame]?.time * 1000).toLocaleString('sk-SK')}</p>
+		<p><strong>Animácia:</strong> {isAnimating ? '▶️ Beží' : '⏸️ Zastavená'}</p>
+	{:else}
+		<p><strong>Radar dáta:</strong> ⏳ Načítavam...</p>
+	{/if}
+</div>
+
+<!-- OVLÁDACIE PRVKY -->
+<div class="controls">
+	<h3>🎮 Ovládanie</h3>
+	
+	<!-- 
+	TLAČIDLO PLAY/PAUSE:
+	- on:click = event handler
+	- disabled = deaktivované ak nie sú dáta
+	- {expression} = dynamický text
+	-->
+	<button 
+		on:click={toggleAnimation} 
+		disabled={radarTimestamps.length === 0}
+		class="play-button"
+	>
+		{isAnimating ? '⏸️ Zastaviť' : '▶️ Spustiť'} animáciu
+	</button>
+	
+	<!-- TIMELINE SLIDER - zobrazí sa len ak máme dáta -->
+	{#if radarTimestamps.length > 0}
+		<div class="timeline-control">
+			<label>
+				<strong>📅 Časová os:</strong> Snímka {currentFrame + 1} z {radarTimestamps.length}
+				<br>
+				<small>💡 Tip: Potiahnite slider pre manuálne ovládanie</small>
+				
+				<!-- 
+				RANGE INPUT (slider):
+				- min/max = rozsah hodnôt
+				- value = aktuálna hodnota
+				- on:input = event keď používateľ posúva slider
+				- parseInt() = konverzia string → number
+				-->
+				<input 
+					type="range" 
+					min="0" 
+					max={radarTimestamps.length - 1} 
+					value={currentFrame}
+					on:input={(e) => goToFrame(parseInt(e.target.value))}
+					class="timeline-slider"
+				/>
+			</label>
+		</div>
+	{/if}
+</div>
+
+<!-- 
+MAPA CONTAINER:
+- bind:this = vytvorí referenciu mapContainer na tento DOM element
+- Leaflet ho použije ako target pre vytvorenie mapy
+-->
+<div bind:this={mapContainer} class="map"></div>
+
+<!-- INFO PANEL - technické informácie -->
+<div class="info">
+	<h3>ℹ️ Technické informácie</h3>
+	<ul>
+		<li><strong>🗺️ Mapa:</strong> OpenStreetMap (bez API key)</li>
+		<li><strong>📡 Radar dáta:</strong> RainViewer API (free)</li>
+		<li><strong>🔄 Aktualizácia:</strong> Každých 10 minút</li>
+		<li><strong>📱 Kompatibilita:</strong> Desktop + Mobile</li>
+		<li><strong>🌍 Pokrytie:</strong> Globálne radar dáta</li>
+		<li><strong>⚡ Technológie:</strong> SvelteKit + Leaflet.js</li>
+	</ul>
+</div>
+
+<!-- 
+=============================================================================
+CSS ŠTÝLY - VIZUÁLNE FORMÁTOVANIE
+=============================================================================
+Svelte má scoped CSS - štýly platia len pre tento komponent
+=============================================================================
+-->
+<style>
+	/* =======================================================================
+	   GLOBÁLNE ŠTÝLY
+	   ======================================================================= */
+	
+	/* Reset základných štýlov */
+	* {
+		box-sizing: border-box; /* padding a border sa počítajú do width */
+	}
+
+	/* Hlavný kontajner */
+	:global(body) {
+		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+		line-height: 1.6; /* riadkovanie pre lepšiu čitateľnosť */
+		margin: 0;
+		padding: 20px;
+		background: #f5f7fa; /* jemné svetlo-sivé pozadie */
+	}
+
+	/* =======================================================================
+	   HLAVIČKY A TEXTY
+	   ======================================================================= */
+	
+	h1 {
+		margin: 0 0 10px 0; /* margin: top right bottom left */
+		color: #2c3e50;     /* tmavo modrá */
+		font-size: 2.5rem;  /* relatívna veľkosť písma */
+		font-weight: 700;   /* tučné */
+		text-align: center;
+	}
+
+	.subtitle {
+		text-align: center;
+		color: #7f8c8d;    /* svetlo šedá */
+		margin: 0 0 30px 0;
+		font-size: 1.1rem;
+	}
+
+	h3 {
+		margin: 0 0 15px 0;
+		color: #34495e;    /* tmavo šedá */
+		font-size: 1.3rem;
+	}
+
+	/* =======================================================================
+	   KARTY A PANELY
+	   ======================================================================= */
+	
+	.status, .controls, .info {
+		background: white;           /* biele pozadie */
+		border-radius: 12px;        /* zaoblené rohy */
+		padding: 20px;              /* vnútorný spacing */
+		margin-bottom: 20px;        /* spacing medzi kartami */
+		box-shadow: 0 2px 10px rgba(0,0,0,0.1); /* jemný tieň */
+		border: 1px solid #e1e8ed;  /* jemný border */
+	}
+
+	/* Texty v status paneli */
+	.status p {
+		margin: 8px 0;
+		display: flex;              /* flexbox layout */
+		justify-content: space-between; /* text vľavo, hodnota vpravo */
+		align-items: center;
+	}
+
+	/* =======================================================================
+	   OVLÁDACIE PRVKY
+	   ======================================================================= */
+	
+	/* Hlavné tlačidlo play/pause */
+	.play-button {
+		padding: 15px 30px;
+		background: linear-gradient(135deg, #27ae60, #2ecc71); /* gradient pozadie */
+		color: white;
+		border: none;
+		border-radius: 8px;
+		cursor: pointer;
+		font-size: 16px;
+		font-weight: 600;
+		transition: all 0.3s ease; /* smooth animácie */
+		margin-bottom: 20px;
+		display: block;
+		width: 100%;
+	}
+
+	/* Hover efekt pre tlačidlo */
+	.play-button:hover:not(:disabled) {
+		background: linear-gradient(135deg, #219a52, #27ae60);
+		transform: translateY(-2px); /* mierne zdvihnutie */
+		box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3); /* farebný tieň */
+	}
+
+	/* Deaktivované tlačidlo */
+	.play-button:disabled {
+		background: #bdc3c7; /* šedé pozadie */
+		cursor: not-allowed;
+		transform: none;
+		box-shadow: none;
+	}
+
+	/* Timeline ovládanie */
+	.timeline-control {
+		margin-top: 20px;
+	}
+
+	.timeline-control label {
+		display: block;
+		font-weight: 500;
+		color: #2c3e50;
+	}
+
+	.timeline-control small {
+		color: #7f8c8d;
+		font-style: italic;
+	}
+
+	/* Timeline slider */
+	.timeline-slider {
+		width: 100%;           /* celá šírka kontajnera */
+		height: 8px;           /* výška tracku */
+		border-radius: 4px;
+		background: #ddd;      /* farba tracku */
+		outline: none;
+		margin-top: 10px;
+		cursor: pointer;
+	}
+
+	/* Slider thumb (posúvač) */
+	.timeline-slider::-webkit-slider-thumb {
+		appearance: none;      /* odstráni default styling */
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;    /* kruhový tvar */
+		background: #e74c3c;   /* červená farba */
+		cursor: pointer;
+		box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+		transition: all 0.2s ease;
+	}
+
+	/* Hover efekt pre slider thumb */
+	.timeline-slider::-webkit-slider-thumb:hover {
+		background: #c0392b;   /* tmavšia červená */
+		transform: scale(1.1); /* mierne zväčšenie */
+	}
+
+	/* Firefox slider styling */
+	.timeline-slider::-moz-range-thumb {
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;
+		background: #e74c3c;
+		cursor: pointer;
+		border: none;
+	}
+
+	/* =======================================================================
+	   MAPA
+	   ======================================================================= */
+	
+	.map {
+		width: 100%;                /* celá šírka kontajnera */
+		height: 500px;              /* fixná výška */
+		border: 2px solid #34495e;  /* tmavo šedý border */
+		border-radius: 12px;        /* zaoblené rohy */
+		overflow: hidden;           /* skryje content čo presahuje */
+		margin-bottom: 20px;
+		box-shadow: 0 4px 20px rgba(0,0,0,0.15); /* výraznejší tieň */
+	}
+
+	/* =======================================================================
+	   INFO PANEL
+	   ======================================================================= */
+	
+	.info ul {
+		margin: 0;
+		padding-left: 20px;    /* odsadenie bulletov */
+	}
+
+	.info li {
+		margin: 8px 0;         /* spacing medzi položkami */
+		color: #555;           /* tmavo šedá farba textu */
+	}
+
+	/* =======================================================================
+	   RESPONSIVE DESIGN - MOBILE ZARIADENIA
+	   ======================================================================= */
+	
+	/* Tablets a menšie (768px a menej) */
+	@media (max-width: 768px) {
+		:global(body) {
+			padding: 15px;     /* menší padding na mobile */
+		}
+
+		h1 {
+			font-size: 2rem;   /* menší nadpis */
+		}
+
+		.map {
+			height: 400px;     /* nižšia mapa na mobile */
+		}
+
+		.status, .controls, .info {
+			padding: 15px;     /* menší padding v kartách */
+		}
+	}
+
+	/* Malé mobily (480px a menej) */
+	@media (max-width: 480px) {
+		:global(body) {
+			padding: 10px;
+		}
+
+		h1 {
+			font-size: 1.8rem;
+		}
+
+		.map {
+			height: 350px;     /* ešte nižšia mapa */
+		}
+
+		.status p {
+			flex-direction: column;    /* stack text vertically */
+			align-items: flex-start;
+			gap: 4px;
+		}
+	}
+</style>
