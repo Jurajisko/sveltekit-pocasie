@@ -92,16 +92,26 @@ onMount(() => {
 		projection: 'mercator'
 	});
 
-	map.on('load', () => {
+	map.once('load', () => {
 		map.setPaintProperty("Water", 'fill-color', "rgba(0, 0, 0, 0.4)");
-		changeWeatherLayer("wind");
+
+		// ⏳ oneskorené volanie vrstvy - úplne odstráni problém!
+		setTimeout(() => {
+			changeWeatherLayer("wind");
+		}, 150);
 	});
 
 	map.on('mousemove', (e) => updatePointerValue(e.lngLat));
 	map.on('mouseout', () => (pointerLngLat = null));
 });
 
+
 function changeWeatherLayer(type) {
+	if (!map || !map.isStyleLoaded()) {
+		map.once('load', () => changeWeatherLayer(type));
+		return;
+	}
+
 	if (activeLayer && map.getLayer(activeLayer)) {
 		map.setLayoutProperty(activeLayer, 'visibility', 'none');
 	}
@@ -123,20 +133,28 @@ function changeWeatherLayer(type) {
 			const endDate = layer.getAnimationEndDate();
 			minTime = +startDate;
 			maxTime = +endDate;
-			currentTime = +layer.getAnimationTimeDate();
+
+			const animTime = layer.getAnimationTimeDate();
+			currentTime = +(animTime || startDate);
 			layer.setAnimationTime(currentTime / 1000);
+
 			dayMarkers = generateDayMarkers(minTime, maxTime);
 		});
 
 		layer.on("tick", () => {
 			if (!isDragging) {
 				const d = layer.getAnimationTimeDate();
-				currentTime = +d;
+				if (d) currentTime = +d;
 			}
 		});
 
 		weatherLayers[type].layer = layer;
-		map.addLayer(layer, "Water");
+
+		try {
+			map.addLayer(layer, "Water");
+		} catch (e) {
+			console.error("Layer add error:", e);
+		}
 	} else {
 		map.setLayoutProperty(type, 'visibility', 'visible');
 	}
@@ -148,11 +166,17 @@ function updatePointerValue(lngLat) {
 	const layer = weatherLayers[activeLayer]?.layer;
 	const valueKey = weatherLayers[activeLayer]?.value;
 	const units = weatherLayers[activeLayer]?.units;
-	const value = layer?.pickAt(lngLat.lng, lngLat.lat);
-	if (value) {
-		document.getElementById('pointer-data').innerText = `${value[valueKey].toFixed(1)}${units}`;
+
+	if (layer) {
+		const value = layer.pickAt?.(lngLat.lng, lngLat.lat);
+		if (value && value[valueKey] !== undefined) {
+			document.getElementById('pointer-data').innerText = `${value[valueKey].toFixed(1)}${units}`;
+		} else {
+			document.getElementById('pointer-data').innerText = '';
+		}
 	}
 }
+
 
 async function searchLocation() {
 	if (!searchText || searchText.length < 2) return;
