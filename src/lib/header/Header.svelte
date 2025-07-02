@@ -40,6 +40,8 @@
 	header {
 		display: flex;
 		justify-content: space-between;
+		position: relative;
+		z-index: 999;
 	}
 
 	.corner {

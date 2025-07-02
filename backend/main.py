@@ -4,6 +4,14 @@ import httpx
 import os
 from typing import Optional
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
+
+# API Configuration (pridaj tieto riadky)
+TOMORROW_IO_API_KEY = os.getenv("TOMORROW_IO_API_KEY")
+TOMORROW_IO_BASE_URL = os.getenv("TOMORROW_IO_BASE_URL", "https://api.tomorrow.io/v4")
+
 app = FastAPI(title="Weather App Pro API", version="1.0.0")
 
 # CORS configuration
@@ -14,10 +22,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Tomorrow.io API configuration
-TOMORROW_IO_API_KEY = "CoemxyXvE8oBM2nuW2iQ5Ka0X560eUnd"
-TOMORROW_IO_BASE_URL = "https://api.tomorrow.io/v4"
 
 @app.get("/")
 async def root():

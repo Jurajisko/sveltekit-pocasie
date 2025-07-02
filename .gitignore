@@ -21,3 +21,6 @@ Thumbs.db
 
 # Weather App specific
 weather-cache/
+
+# Ignore OLD pages
+src/routes/map/+page.svelte__OLD__*
