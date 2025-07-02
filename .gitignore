@@ -21,3 +21,7 @@ Thumbs.db
 
 # Weather App specific
 weather-cache/
+
+# Ignore OLD pages
+**/*__OLD__*
+
