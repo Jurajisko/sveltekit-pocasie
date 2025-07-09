@@ -38,9 +38,12 @@
 
 <style>
 	header {
-		display: flex;
+		display: none;
+		/* display: flex; */
 		justify-content: space-between;
-		position: relative;
+		position: absolute;
+		left: 50%;
+		transform: translateX(-50%);
 		z-index: 9;
 	}
 

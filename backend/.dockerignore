@@ -1,0 +1,14 @@
+# Zbytočnosti pre backend build
+.vscode/
+__pycache__/
+.git/
+.gitignore
+README.md
+*.svelte
+*.ts
+*.js
+*.json
+node_modules/
+src/
+.env
+.svelte-kit/

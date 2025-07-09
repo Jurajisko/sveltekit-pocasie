@@ -25,4 +25,5 @@ weather-cache/
 # Ignore OLD pages
 **/*__OLD__*
 **/*__BAK__*
+**/*__DEF__*
 

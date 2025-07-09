@@ -180,13 +180,14 @@ async def get_weather_description(weather_code: int):
 # Open Meteo
 # https://open-meteo.com/en/docs
 #
+
 @app.get("/api/weather-free/{location}")
-async def get_weather_free(location: str):
+async def get_weather_free(location: str, type: Optional[str] = "hourly"):
     """FREE weather data cez Open-Meteo (unlimited calls)"""
     
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # Najprv zisti lat/lon pre mesto
+            # Geocoding → lat/lon
             geo_url = "https://geocoding-api.open-meteo.com/v1/search"
             geo_response = await client.get(geo_url, params={"name": location})
             geo_data = geo_response.json()
@@ -194,46 +195,79 @@ async def get_weather_free(location: str):
             if not geo_data.get("results"):
                 raise HTTPException(status_code=404, detail="Location not found")
             
-            # Vezmi první výsledek
             place = geo_data["results"][0]
             lat = place["latitude"]
             lon = place["longitude"]
             
-            # Teraz weather data
+            # Weather fetch
             weather_url = "https://api.open-meteo.com/v1/forecast"
             weather_params = {
                 "latitude": lat,
                 "longitude": lon,
-                "current": "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code",
                 "timezone": "auto"
             }
-            
+
+            # Podľa typu forecastu
+            if type == "hourly":
+                weather_params["hourly"] = "temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation_probability,weather_code"
+            elif type == "daily":
+                weather_params["daily"] = "temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code"
+            elif type == "current":
+                weather_params["current"] = "temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"
+            else:
+                raise HTTPException(status_code=400, detail="Invalid forecast type")
+
             weather_response = await client.get(weather_url, params=weather_params)
             weather_data = weather_response.json()
-            
-            # Formatuj pre frontend (rovnako ako Tomorrow.io)
-            current = weather_data.get("current", {})
-            
-            formatted_data = {
+
+            # Výstup podľa typu
+            output = {
                 "location": f"{place['name']}, {place.get('country', '')}",
-                "timestamp": current.get("time"),
-                "weather": {
+                "source": "open-meteo",
+                "status": "success"
+            }
+
+            if type == "hourly":
+                hourly = weather_data.get("hourly", {})
+                hourly_list = []
+                for i in range(min(24, len(hourly["time"]))):
+                    hourly_list.append({
+                        "time": hourly["time"][i],
+                        "temperature": hourly["temperature_2m"][i],
+                        "humidity": hourly["relative_humidity_2m"][i],
+                        "windSpeed": hourly["wind_speed_10m"][i],
+                        "precipitationProbability": hourly["precipitation_probability"][i],
+                        "weatherCode": hourly["weather_code"][i]
+                    })
+                output["forecast"] = { "hourly": hourly_list }
+
+            elif type == "daily":
+                daily = weather_data.get("daily", {})
+                daily_list = []
+                for i in range(len(daily["time"])):
+                    daily_list.append({
+                        "date": daily["time"][i],
+                        "temperatureMax": daily["temperature_2m_max"][i],
+                        "temperatureMin": daily["temperature_2m_min"][i],
+                        "precipitationProbability": daily["precipitation_probability_max"][i],
+                        "weatherCode": daily["weather_code"][i]
+                    })
+                output["forecast"] = { "daily": daily_list }
+
+            elif type == "current":
+                current = weather_data.get("current", {})
+                output["weather"] = {
                     "temperature": current.get("temperature_2m"),
                     "humidity": current.get("relative_humidity_2m"),
                     "windSpeed": current.get("wind_speed_10m"),
                     "weatherCode": current.get("weather_code")
-                },
-                "source": "open-meteo",
-                "status": "success"
-            }
-            
-            return formatted_data
+                }
+                output["timestamp"] = current.get("time")
+
+            return output
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Open-Meteo error: {str(e)}")
+        import traceback
+        traceback_str = traceback.format_exc()
+        raise HTTPException(status_code=500, detail=f"Open-Meteo error: {str(e)}\n{traceback_str}")
 
-
-@app.get("/api/test/openmeteo")
-async def test_openmeteo():
-    """Test Open-Meteo connection"""
-    return await get_weather_free("Bratislava")

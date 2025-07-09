@@ -2,6 +2,11 @@
 import { onMount } from 'svelte';
 import TimeSlider from '$lib/components/TimeSlider.svelte';
 
+import * as maptilersdk from '@maptiler/sdk';
+// import * as maptilerweather from '@maptiler/weather';
+// import '@maptiler/sdk/dist/maptiler-sdk.css';
+// import 'maplibre-gl/dist/maplibre-gl.css';
+
 let map;
 let mapDiv;
 let activeLayer = null;
@@ -18,7 +23,7 @@ let isDragging = false;
 let dayMarkers = [];
 
 // Globálne premenné pre MapTiler SDK a Weather
-let maptilersdk;
+// let maptilersdk;
 let maptilerweather;
 
 function generateDayMarkers(start, end) {
@@ -66,13 +71,21 @@ function togglePlay() {
   }
 }
 
+// const weatherLayers = {
+//   precipitation: { layer: null, value: 'value', units: ' mm', colorRamp: null },
+//   pressure: { layer: null, value: 'value', units: ' hPa', colorRamp: null },
+//   radar: { layer: null, value: 'value', units: ' dBZ', colorRamp: null },
+//   temperature: { layer: null, value: 'value', units: '°', colorRamp: null },
+//   wind: { layer: null, value: 'speedMetersPerSecond', units: ' m/s', colorRamp: null }
+// };
 const weatherLayers = {
-  precipitation: { layer: null, value: 'value', units: ' mm', colorRamp: null },
-  pressure: { layer: null, value: 'value', units: ' hPa', colorRamp: null },
-  radar: { layer: null, value: 'value', units: ' dBZ', colorRamp: null },
-  temperature: { layer: null, value: 'value', units: '°', colorRamp: null },
-  wind: { layer: null, value: 'speedMetersPerSecond', units: ' m/s', colorRamp: null }
+  precipitation: { layer: null, value: 'value', units: ' mm', colorRamp: maptilerweather.ColorRamp.builtin.PRECIPITATION },
+  pressure: { layer: null, value: 'value', units: ' hPa', colorRamp: maptilerweather.ColorRamp.builtin.PRESSURE_3 },
+  radar: { layer: null, value: 'value', units: ' dBZ', colorRamp: maptilerweather.ColorRamp.builtin.RADAR },
+  temperature: { layer: null, value: 'value', units: '°', colorRamp: maptilerweather.ColorRamp.builtin.TEMPERATURE_3 },
+  wind: { layer: null, value: 'speedMetersPerSecond', units: ' m/s', colorRamp: maptilerweather.ColorRamp.builtin.WIND_ROCKET }
 };
+
 
 // Funkcia na načítanie scriptov
 function loadScript(src) {
@@ -96,6 +109,71 @@ function loadCSS(href) {
   });
 }
 
+class ColorRampLegendControl {
+	constructor(options) {
+		this.colorStops = options.colorStops;
+		this.units = options.units || '';
+		this.container = null;
+	}
+
+  onAdd(map) {
+    this.map = map;
+    const container = document.createElement("div");
+    container.className = "maptiler-control legend";
+
+    const title = document.createElement("strong");
+    title.innerText = `Legend (${this.units.trim()})`;
+    container.appendChild(title);
+
+    // Vytvor gradient
+    const gradient = document.createElement("div");
+    gradient.className = "legend-gradient";
+
+    const min = Math.round(this.colorStops[0].value);
+    const max = Math.round(this.colorStops[this.colorStops.length - 1].value);
+
+    const colorStopsCSS = this.colorStops
+      .map(stop => {
+        const pct = ((stop.value - min) / (max - min)) * 100;
+        const [r, g, b, a] = stop.color;
+        return `rgba(${r},${g},${b},${a / 255}) ${pct}%`;
+      })
+      .join(", ");
+
+    gradient.style.background = `linear-gradient(to top, ${colorStopsCSS})`;
+    gradient.style.height = "200px";
+    gradient.style.width = "20px";
+    gradient.style.margin = "8px 0";
+    gradient.style.border = "1px solid #ccc";
+
+    const labels = document.createElement("div");
+    labels.style.display = "flex";
+    labels.style.flexDirection = "column";
+    labels.style.alignItems = "center";
+    labels.style.gap = "4px";
+
+    const maxLabel = document.createElement("div");
+    maxLabel.textContent = `${max}${this.units}`;
+    const minLabel = document.createElement("div");
+    minLabel.textContent = `${min}${this.units}`;
+
+    labels.appendChild(maxLabel);
+    labels.appendChild(gradient);
+    labels.appendChild(minLabel);
+
+    container.appendChild(labels);
+    this.container = container;
+    return container;
+  }
+
+
+	onRemove() {
+		this.container?.remove();
+		this.map = undefined;
+	}
+}
+
+
 onMount(async () => {
   if (!mapDiv) return;
   
@@ -106,9 +184,10 @@ onMount(async () => {
       loadScript('https://cdn.maptiler.com/maptiler-weather/v3.0.1/maptiler-weather.umd.min.js'),
       loadCSS('https://cdn.maptiler.com/maptiler-sdk-js/v3.2.0/maptiler-sdk.css')
     ]);
+    // await loadScript('https://cdn.maptiler.com/maptiler-weather/v3.0.1/maptiler-weather.umd.min.js');
 
     // Priradí globálne objekty
-    maptilersdk = window.maptilersdk;
+    // maptilersdk = window.maptilersdk;
     maptilerweather = window.maptilerweather;
 
     // Nastav API kľúč
@@ -125,18 +204,45 @@ onMount(async () => {
     });
 
     // Nastavenia po načítaní mapy
+    // map.on('load', () => {
+    //   map.setPaintProperty('Water', 'fill-color', 'rgba(0, 0, 0, 0.4)');
+      
+    //   // Nastav colorRamps
+    //   weatherLayers.precipitation.colorRamp = maptilerweather.ColorRamp.builtin.PRECIPITATION;
+    //   weatherLayers.pressure.colorRamp = maptilerweather.ColorRamp.builtin.PRESSURE_3;
+    //   weatherLayers.radar.colorRamp = maptilerweather.ColorRamp.builtin.RADAR;
+    //   weatherLayers.temperature.colorRamp = maptilerweather.ColorRamp.builtin.TEMPERATURE_3;
+    //   weatherLayers.wind.colorRamp = maptilerweather.ColorRamp.builtin.WIND_FISHPURPLEGREEN;
+      
+    //   changeWeatherLayer('wind');
+    // });
     map.on('load', () => {
+      // Počkaj kým sa načíta weather SDK
+      const checkWeatherSDK = () => {
+        if (maptilerweather) {
+          console.log("Weather SDK loaded!");
+          initializeWeatherLayers();
+        } else {
+          console.log("Waiting for weather SDK...");
+          setTimeout(checkWeatherSDK, 100);
+        }
+      };
+      checkWeatherSDK();
+    });
+    function initializeWeatherLayers() {
       map.setPaintProperty('Water', 'fill-color', 'rgba(0, 0, 0, 0.4)');
       
-      // Nastav colorRamps
+      // Zisti dostupné palety
+      console.log("Available color ramps:", Object.keys(maptilerweather.ColorRamp.builtin));
+      
       weatherLayers.precipitation.colorRamp = maptilerweather.ColorRamp.builtin.PRECIPITATION;
       weatherLayers.pressure.colorRamp = maptilerweather.ColorRamp.builtin.PRESSURE_3;
       weatherLayers.radar.colorRamp = maptilerweather.ColorRamp.builtin.RADAR;
       weatherLayers.temperature.colorRamp = maptilerweather.ColorRamp.builtin.TEMPERATURE_3;
-      weatherLayers.wind.colorRamp = maptilerweather.ColorRamp.builtin.WIND_ROCKET;
+      weatherLayers.wind.colorRamp = maptilerweather.ColorRamp.builtin.VIRIDIS;
       
       changeWeatherLayer('wind');
-    });
+    }
 
     map.on('mousemove', (e) => updatePointerValue(e.lngLat));
     map.on('mouseout', () => (pointerLngLat = null));
@@ -152,6 +258,23 @@ function changeWeatherLayer(type) {
   if (activeLayer && map.getLayer(activeLayer)) {
     map.setLayoutProperty(activeLayer, 'visibility', 'none');
   }
+
+  if (map._legendControl) {
+    map.removeControl(map._legendControl);
+    map._legendControl = null;
+  }
+
+  const legendInfo = weatherLayers[type];
+  if (legendInfo?.colorRamp) {
+    const colorStops = legendInfo.colorRamp.getRawColorStops();
+    const legendControl = new ColorRampLegendControl({
+      colorStops,
+      units: legendInfo.units
+    });
+    map.addControl(legendControl, 'bottom-left');
+    map._legendControl = legendControl;
+  }
+
 
   activeLayer = type;
 
@@ -357,6 +480,25 @@ function selectPlace(place) {
   width: 80%;
   max-width: 800px;
 }
+
+
+
+.maptiler-control.legend {
+  background: white;
+  padding: 8px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  font-size: 12px;
+  max-width: 80px;
+  text-align: center;
+  line-height: 1.4em;
+}
+
+.legend-gradient {
+  border-radius: 4px;
+}
+
+
 </style>
 
 <div bind:this={mapDiv} id="map"></div>
