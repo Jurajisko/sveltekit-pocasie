@@ -1,9 +1,10 @@
 <script>
 	import Header from '$lib/header/Header.svelte';
-  import { webVitals } from '$lib/vitals';
-  import { browser } from '$app/env';
-  import { page } from '$app/stores';
-  import '../app.css';
+	import { webVitals } from '$lib/vitals';
+	import { browser } from '$app/env';
+	import { page } from '$app/stores';
+	import '../app.css';
+	import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
 
   let analyticsId = import.meta.env.VERCEL_ANALYTICS_ID;
 
@@ -17,6 +18,8 @@
 </script>
 
 <Header />
+
+<ThemeSwitcher />
 
 <main>
 	<slot />
