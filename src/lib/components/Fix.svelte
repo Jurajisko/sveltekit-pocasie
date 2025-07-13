@@ -244,33 +244,57 @@
   }
   */
 
-  async function selectLocation(event) {
-      const feature = event.detail;
+  // async function selectLocation(event) {
+  //     const feature = event.detail;
       
-      // Získaj súradnice
-      let lng, lat;
+  //     // Získaj súradnice
+  //     let lng, lat;
       
-      if (feature.center) {
-          [lng, lat] = feature.center;
-      } else if (feature.lon && feature.lat) {
-          lng = parseFloat(feature.lon);
-          lat = parseFloat(feature.lat);
-      } else {
-          console.error('Invalid location format:', feature);
-          return;
-      }
+  //     if (feature.center) {
+  //         [lng, lat] = feature.center;
+  //     } else if (feature.lon && feature.lat) {
+  //         lng = parseFloat(feature.lon);
+  //         lat = parseFloat(feature.lat);
+  //     } else {
+  //         console.error('Invalid location format:', feature);
+  //         return;
+  //     }
 
-      const locationName = feature.place_name || feature.display_name || 'Vybraná lokácia';
+  //     const locationName = feature.place_name || feature.display_name || 'Vybraná lokácia';
       
-      // ✅ TOTO JE VŠETKO ČO POTREBUJEŠ:
-      await handleLocationClick(lng, lat, locationName);
+  //     // ✅ TOTO JE VŠETKO ČO POTREBUJEŠ:
+  //     await handleLocationClick(lng, lat, locationName);
 
-      // ✅ PRIDAJ TOTO NA KONIEC:
-      await fetchExtendedWeather(lat, lng);
+  //     // ✅ PRIDAJ TOTO NA KONIEC:
+  //     await fetchExtendedWeather(lat, lng);
       
-      // Update search query
-      searchQuery = locationName;
+  //     // Update search query
+  //     searchQuery = locationName;
+  // }
+
+  // ✅ UPRAŤ selectLocation - jedno volanie
+async function selectLocation(event) {
+  const feature = event.detail;
+  
+  let lng, lat;
+  
+  if (feature.center) {
+    [lng, lat] = feature.center;
+  } else if (feature.lon && feature.lat) {
+    lng = parseFloat(feature.lon);
+    lat = parseFloat(feature.lat);
+  } else {
+    console.error('Invalid location format:', feature);
+    return;
   }
+
+  const locationName = feature.place_name || feature.display_name || 'Vybraná lokácia';
+  
+  // ✅ JEDNO VOLANIE - všetko sa načíta súčasne
+  await handleLocationClick(lng, lat, locationName);
+  
+  searchQuery = locationName;
+}
   
   // 🆕 PRIDANÉ: Weather data fetching
   let weatherData = null;
@@ -370,11 +394,16 @@
   let showDetailPanel = false;
   let hourlyData = [];
 
+  // ✅ UPRAŤ toggleDetailPanel - už nebude čakať na data
+  // function toggleDetailPanel() {
+  //   showDetailPanel = !showDetailPanel;
+  //   if (showDetailPanel && weatherData) {
+  //     fetchExtendedWeather();
+  //   }
+  // }
   function toggleDetailPanel() {
     showDetailPanel = !showDetailPanel;
-    if (showDetailPanel && weatherData) {
-      fetchExtendedWeather();
-    }
+    // ✅ ODSTRÁŇ fetchExtendedWeather() - data už sú načítané!
   }
 
   function closeDetailPanel() {
@@ -387,6 +416,7 @@
     }
   }
 
+  /*
   async function fetchExtendedWeather() {
     if (!pointerLngLat) return;
     
@@ -440,7 +470,7 @@
     } catch (error) {
       console.error('Extended weather fetch error:', error);
     }
-  }
+  } */
 
   // ✅ HLAVNÁ INICIALIZÁCIA (zachováva working verziu)
   onMount(async () => {
@@ -525,57 +555,128 @@
   });
 
   // 🆕 NOVÁ FUNKCIA - priamo spracuje click na mapu
-  async function handleLocationClick(lng, lat, locationName) {
-    const isMobile = window.innerWidth <= 991;
+  // ✅ OPRVAENÝ handleLocationClick - načíta všetko súčasne
+async function handleLocationClick(lng, lat, locationName) {
+  const isMobile = window.innerWidth <= 991;
+  
+  // Fly to location (rovnaké ako pred tým)
+  const flyToOptions = {
+    center: [lng, lat],
+    duration: 2000,
+    essential: true
+  };
+  
+  if (isMobile) {
+    flyToOptions.zoom = 12;
+    flyToOptions.center = [lng, lat + 0.03];
+    flyToOptions.padding = { top: 80, bottom: 300, left: 20, right: 20 };
+  } else {
+    flyToOptions.zoom = 12;
+    flyToOptions.center = [lng, lat + 0.006];
+  }
+  
+  map.flyTo(flyToOptions);
+
+  // Remove old marker (rovnaké)
+  if (marker) {
+    if (marker.getPopup()) {
+      marker.getPopup().remove();
+    }
+    marker.remove();
+    marker = null;
+  }
+
+  // Add new marker (rovnaké)
+  marker = new maptilersdk.Marker({
+    color: '#667eea',
+    scale: 1.2,
+    draggable: false
+  }).setLngLat([lng, lat]).addTo(map);
+
+  // Update search query
+  searchQuery = locationName;
+  
+  // ✅ SET pointerLngLat PRED volaním API!
+  pointerLngLat = { lat, lng };
+
+  // ✅ ZAVOLAJ OBE API SÚČASNE - paralelne!
+  try {
+    console.log('🔄 Loading weather data...');
     
-    // 🎯 RÔZNE NASTAVENIA MAPY
-    const flyToOptions = {
-        center: [lng, lat],
-        duration: 2000,
-        essential: true
-    };
+    // Základné + rozšírené data paralelne
+    await Promise.all([
+      fetchWeather(lat, lng),           // 5-dňová
+      fetchExtendedWeatherFixed(lat, lng) // 7-dňová + hodinová
+    ]);
     
-    if (isMobile) {
-        // 📱 MOBILE: vyšší zoom, posun mapy vyššie aby popup bol viditeľný
-        flyToOptions.zoom = 12;
-        flyToOptions.center = [lng, lat + 0.03]; // Posun severnejšie
-        flyToOptions.padding = { top: 80, bottom: 300, left: 20, right: 20 };
-    } else {
-        // 💻 DESKTOP: normálne nastavenia
-        flyToOptions.zoom = 12;
-        flyToOptions.center = [lng, lat + 0.006]; // Posun severnejšie
+    console.log('✅ All weather data loaded!');
+    
+    // Create popup
+    if (markerPopup) {
+      markerPopup.createPopup();
     }
     
-    // Fly to location
-    map.flyTo(flyToOptions);
-
-      // Remove old marker
-      if (marker) {
-          if (marker.getPopup()) {
-              marker.getPopup().remove();
-          }
-          marker.remove();
-          marker = null;
-      }
-
-      // Add new marker
-      marker = new maptilersdk.Marker({
-          color: '#667eea',
-          scale: 1.2,
-          draggable: false
-      }).setLngLat([lng, lat]).addTo(map);
-
-      // Update search query
-      searchQuery = locationName;
-
-      // Fetch weather data
-      await fetchWeather(lat, lng);
-
-      // ✅ OPRAVENÝ RIADOK - použiť komponentu:
-      if (markerPopup) {
-          markerPopup.createPopup();
-      }
+  } catch (error) {
+    console.error('❌ Weather fetch error:', error);
+    
+    // Fallback - basic data only
+    await fetchWeather(lat, lng);
+    if (markerPopup) {
+      markerPopup.createPopup();
+    }
   }
+}
+
+// ✅ NOVÁ fetchExtendedWeatherFixed - berie parametre priamo
+async function fetchExtendedWeatherFixed(lat, lng) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation,wind_speed_10m,weathercode&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=7`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    
+    if (data.hourly) {
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      const currentTimeIndex = data.hourly.time.findIndex(time => {
+        const hour = new Date(time).getHours();
+        return hour === currentHour;
+      });
+      
+      const startIndex = currentTimeIndex >= 0 ? currentTimeIndex : 0;
+      const endIndex = Math.min(startIndex + 24, data.hourly.time.length);
+      
+      hourlyData = data.hourly.time.slice(startIndex, endIndex).map((time, i) => {
+        const actualIndex = startIndex + i;
+        const hour = new Date(time).getHours();
+        
+        return {
+          time: hour + 'h',
+          temp: Math.round(data.hourly.temperature_2m[actualIndex]),
+          code: data.hourly.weathercode[actualIndex],
+          originalTime: time,
+          icon: getWeatherIcon(data.hourly.weathercode[actualIndex], time),
+          precipitation: data.hourly.precipitation[actualIndex] || 0,
+          wind: data.hourly.wind_speed_10m[actualIndex] ? 
+                data.hourly.wind_speed_10m[actualIndex].toFixed(1) : '0.0'
+        };
+      });
+
+      // ✅ AKTUALIZUJ weatherData.extended
+      if (weatherData) {
+        weatherData.extended = {
+          hourly: data.hourly,
+          daily: data.daily
+        };
+      }
+      
+      console.log('✅ Extended weather data loaded!');
+    }
+  } catch (error) {
+    console.error('Extended weather fetch error:', error);
+  }
+}
 
   // ✅ FUNGUJÚCE: createWeatherLayer (zachováva working verziu)
   function createWeatherLayer(type) {
@@ -861,9 +962,7 @@
               </div>
             </div>
           {/if}
-            
           
-
           <!-- WEATHER CHARTS -->
           <WeatherCharts {weatherData} />
         </div>
