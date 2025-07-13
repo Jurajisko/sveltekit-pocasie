@@ -475,7 +475,8 @@
                   }
               }
               
-              maplibregl-popup {
+              .maplibregl-popup,
+              .weather-popup-themed {
                 z-index: 9 !important;
               }
 

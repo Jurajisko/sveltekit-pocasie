@@ -625,6 +625,12 @@ async function handleLocationClick(lng, lat, locationName) {
         console.log('Extended vs basic match:', 
           weatherData.daily.weathercode[0] === weatherData.extended.daily.weathercode[0]);
       }
+
+      console.log('=== WEATHER CODES COMPARISON ===');
+      console.log('Daily codes (7-day):', weatherData.daily.weathercode);
+      console.log('Hourly codes (24h):', weatherData.extended.hourly.weathercode.slice(0, 24));
+      console.log('Today daily code:', weatherData.daily.weathercode[0]);
+      console.log('Current hour code:', weatherData.extended.hourly.weathercode[0]);
     } else {
       console.log('❌ weatherData.daily.weathercode not found');
     }
