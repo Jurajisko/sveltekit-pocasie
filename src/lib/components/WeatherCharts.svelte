@@ -43,7 +43,8 @@
     weatherData.extended.daily.time.slice(0, 7).map((time, i) => ({
       day: new Date(time).toLocaleDateString('sk', {weekday: 'short'}),
       max: convertTemp(weatherData.extended.daily.temperature_2m_max[i]),
-      min: convertTemp(weatherData.extended.daily.temperature_2m_min[i])
+      min: convertTemp(weatherData.extended.daily.temperature_2m_min[i]),
+       time: time  // ✅ PRIDAJ TOTO!
     })) : [];
     
   $: precipitationData = weatherData?.extended?.daily ? 
@@ -74,39 +75,40 @@
   $: maxWind = Math.max(...(windData.map(d => d.value) || [10]), 10);
 
 
-  function getDayWeatherIcon(temp, precipitation, index, date) {
-    // Simuluj denný čas pre forecast
-    const dayTime = new Date(date);
-    dayTime.setHours(14); // 14:00 = deň
+  // function getDayWeatherIcon(temp, precipitation, index, date) {
+  //   // Simuluj denný čas pre forecast
+  //   const dayTime = new Date(date);
+  //   dayTime.setHours(14); // 14:00 = deň
     
-    // Základný weather code na základe podmienok
-    let weatherCode = 0; // sunny default
-    if (precipitation > 5) weatherCode = 95; // thunderstorm
-    else if (precipitation > 1) weatherCode = 61; // rain
-    else if (temp > 25) weatherCode = 0; // sunny
-    else if (temp > 20) weatherCode = index % 2 === 0 ? 0 : 2; // sunny/partly cloudy
-    else if (temp > 15) weatherCode = index % 2 === 0 ? 2 : 3; // partly/cloudy
-    else weatherCode = 3; // cloudy
+  //   // Základný weather code na základe podmienok
+  //   let weatherCode = 0; // sunny default
+  //   if (precipitation > 5) weatherCode = 95; // thunderstorm
+  //   else if (precipitation > 1) weatherCode = 61; // rain
+  //   else if (temp > 25) weatherCode = 0; // sunny
+  //   else if (temp > 20) weatherCode = index % 2 === 0 ? 0 : 2; // sunny/partly cloudy
+  //   else if (temp > 15) weatherCode = index % 2 === 0 ? 2 : 3; // partly/cloudy
+  //   else weatherCode = 3; // cloudy
     
-    return getWeatherIcon(weatherCode, dayTime);
-  }
+  //   return getWeatherIcon(weatherCode, dayTime);
+  // }
   
-  function getNightWeatherIcon(temp, precipitation, index, date) {
-    // Simuluj nočný čas pre forecast
-    const nightTime = new Date(date);
-    nightTime.setHours(22); // 22:00 = noc
+  // function getNightWeatherIcon(temp, precipitation, index, date) {
+  //   // Simuluj nočný čas pre forecast
+  //   const nightTime = new Date(date);
+  //   nightTime.setHours(22); // 22:00 = noc
     
-    // Rovnaká logika ako pre deň
-    let weatherCode = 0;
-    if (precipitation > 5) weatherCode = 95;
-    else if (precipitation > 1) weatherCode = 61;
-    else if (temp > 15) weatherCode = index % 2 === 0 ? 0 : 3;
-    else weatherCode = 3;
+  //   // Rovnaká logika ako pre deň
+  //   let weatherCode = 0;
+  //   if (precipitation > 5) weatherCode = 95;
+  //   else if (precipitation > 1) weatherCode = 61;
+  //   else if (temp > 15) weatherCode = index % 2 === 0 ? 0 : 3;
+  //   else weatherCode = 3;
     
-    return getWeatherIcon(weatherCode, nightTime);
-  }
+  //   return getWeatherIcon(weatherCode, nightTime);
+  // }
   
   // Dynamic temperature positioning with safe boundaries
+  
   function getTempPosition(temp) {
     // Calculate actual min/max from current data for dynamic range
     const actualMin = Math.min(...temperatureData.flatMap(d => [d.min, d.max]));
@@ -154,12 +156,18 @@
   <div class="temp-chart-wrapper">
     <div class="temp-chart">
       {#each temperatureData as data, i}
+
+
         {@const precip = precipitationData[i]?.value || 0}
         {@const originalTemp = weatherData?.extended?.daily ? weatherData.extended.daily.temperature_2m_max[i] : data.max}
         <!-- {@const dayIcon = getDayWeatherIcon(originalTemp, precip, i)}
         {@const nightIcon = getNightWeatherIcon(originalTemp, precip, i)} -->
-        {@const dayIcon = getDayWeatherIcon(originalTemp, precip, i, data.time)}
-        {@const nightIcon = getNightWeatherIcon(originalTemp, precip, i, data.time)}
+        <!-- {@const dayIcon = getDayWeatherIcon(originalTemp, precip, i, data.time)}
+        {@const nightIcon = getNightWeatherIcon(originalTemp, precip, i, data.time)} -->
+        <!-- ✅ OPRAVENÉ - správny path k weather codes: -->
+        {@const realWeatherCode = weatherData.daily.weathercode[i]}
+        {@const dayIcon = getWeatherIcon(realWeatherCode, weatherData.daily.time[i] + 'T12:00')}
+        {@const nightIcon = getWeatherIcon(realWeatherCode, weatherData.daily.time[i] + 'T22:00')}
         {@const maxPos = getTempPosition(data.max)}
         {@const minPos = getTempPosition(data.min)}
         {@const barHeight = Math.abs(maxPos - minPos)}

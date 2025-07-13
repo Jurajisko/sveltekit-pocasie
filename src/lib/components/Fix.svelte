@@ -611,6 +611,24 @@ async function handleLocationClick(lng, lat, locationName) {
     
     console.log('✅ All weather data loaded!');
     
+    // ✅ DEBUG AFTER data is loaded:
+    console.log('=== WEATHER CODE DEBUG ===');
+    console.log('weatherData:', weatherData);
+    
+    if (weatherData?.daily?.weathercode) {
+      console.log('Today weather code:', weatherData.daily.weathercode[0]);
+      console.log('Icon for code:', getWeatherIcon(weatherData.daily.weathercode[0]));
+      
+      // ✅ BONUS: Debug extended data too
+      if (weatherData.extended?.daily?.weathercode) {
+        console.log('Extended weather codes:', weatherData.extended.daily.weathercode.slice(0, 7));
+        console.log('Extended vs basic match:', 
+          weatherData.daily.weathercode[0] === weatherData.extended.daily.weathercode[0]);
+      }
+    } else {
+      console.log('❌ weatherData.daily.weathercode not found');
+    }
+    
     // Create popup
     if (markerPopup) {
       markerPopup.createPopup();
@@ -626,7 +644,6 @@ async function handleLocationClick(lng, lat, locationName) {
     }
   }
 }
-
 
 // ✅ NOVÁ fetchExtendedWeatherFixed - berie parametre priamo
 async function fetchExtendedWeatherFixed(lat, lng) {
