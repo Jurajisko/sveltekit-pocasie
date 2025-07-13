@@ -466,8 +466,9 @@
     map = new maptilersdk.Map({
       container: mapDiv,
       style: maptilersdk.MapStyle.BACKDROP,
-      zoom: 6,
-      center: [19.5, 48.7],
+      zoom: 4,
+      // center: [19.5, 48.7], // Slovakia center
+      center: [10, 54],
       projection: 'mercator'
     });
 
