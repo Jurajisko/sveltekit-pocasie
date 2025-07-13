@@ -537,8 +537,8 @@
     
     if (isMobile) {
         // 📱 MOBILE: vyšší zoom, posun mapy vyššie aby popup bol viditeľný
-        flyToOptions.zoom = 15;
-        flyToOptions.center = [lng, lat + 0.004]; // Posun severnejšie
+        flyToOptions.zoom = 12;
+        flyToOptions.center = [lng, lat + 0.03]; // Posun severnejšie
         flyToOptions.padding = { top: 80, bottom: 300, left: 20, right: 20 };
     } else {
         // 💻 DESKTOP: normálne nastavenia
