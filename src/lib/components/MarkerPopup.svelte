@@ -559,7 +559,7 @@
     
     if (isMobile) {
         // 📱 MOBILE: popup vyššie, užší
-        popupOptions.offset = [0, -40];
+        popupOptions.offset = [0, -20];
         popupOptions.maxWidth = '260px';
         popupOptions.anchor = 'bottom';
     } else {
