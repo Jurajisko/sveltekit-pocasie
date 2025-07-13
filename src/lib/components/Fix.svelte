@@ -627,6 +627,7 @@ async function handleLocationClick(lng, lat, locationName) {
   }
 }
 
+
 // ✅ NOVÁ fetchExtendedWeatherFixed - berie parametre priamo
 async function fetchExtendedWeatherFixed(lat, lng) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation,wind_speed_10m,weathercode&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=7`;
@@ -1264,92 +1265,7 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     padding: 24px;
   }
 
-  /* ===== HOURLY SECTION STYLES ===== */
-  .hourly-section {
-    margin-bottom: 32px;
-  }
 
-  .hourly-section h4 {
-    margin: 0 0 20px 0;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--text-primary, #ffffff);
-  }
-
-  .hourly-slider-container {
-    background: var(--bg-secondary, rgba(20, 28, 40, 0.98));
-    border-radius: 16px;
-    padding: 20px;
-    border: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.2));
-  }
-
-  .hourly-slider {
-    display: flex;
-    gap: 16px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-behavior: smooth;
-    scrollbar-width: thin;
-    scrollbar-color: var(--primary-color, #00ffff) var(--bg-secondary, rgba(20, 28, 40, 0.98));
-  }
-
-  .hourly-slider::-webkit-scrollbar {
-    height: 6px;
-  }
-
-  .hourly-slider::-webkit-scrollbar-track {
-    background: var(--bg-secondary, rgba(20, 28, 40, 0.98));
-    border-radius: 3px;
-  }
-
-  .hourly-slider::-webkit-scrollbar-thumb {
-    background: var(--primary-color, #00ffff);
-    border-radius: 3px;
-  }
-
-  .hourly-card {
-    flex: 0 0 auto;
-    width: 80px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 16px 12px;
-    background: var(--bg-glass, rgba(255, 255, 255, 0.1));
-    border-radius: 12px;
-    border: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.2));
-    transition: all 0.3s ease;
-    cursor: pointer;
-  }
-
-  .hourly-card:hover {
-    transform: translateY(-4px);
-    border-color: var(--primary-color, #00ffff);
-  }
-
-  .hour-time {
-    color: var(--text-secondary, #8892b0);
-    font-weight: 600;
-    font-size: 12px;
-  }
-
-  .hour-icon {
-    font-size: 24px;
-    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
-  }
-
-  .hour-temp {
-    color: var(--text-primary, #ffffff);
-    font-weight: 700;
-    font-size: 16px;
-  }
-
-  .hour-wind,
-  .hour-precip {
-    color: var(--text-secondary, #8892b0);
-    font-size: 10px;
-    font-weight: 600;
-  }
 
   /* ===== CONTROL BUTTONS ===== */
 

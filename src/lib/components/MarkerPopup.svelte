@@ -475,6 +475,9 @@
                   }
               }
               
+              maplibregl-popup {
+                z-index: 9 !important;
+              }
 
           `;
           document.head.appendChild(style);
@@ -538,7 +541,7 @@
   }
   
   // Create and show popup
-  export function createPopup() {
+  /* export function createPopup() {
     if (!marker || !weatherData?.current || !maptilersdk) return;
 
     // 📱 DETEKCIA MOBILE/DESKTOP
@@ -591,10 +594,47 @@
     setTimeout(() => {
       marker.togglePopup();
     }, 2200);
+  } */
+  // 🔄 UPRAVENÁ createPopup funkcia
+export function createPopup() {
+  if (!marker || !weatherData?.current || !maptilersdk) return;
+
+  const isMobile = window.innerWidth <= 991;
+  const css = getCSSVariables();
+  const popupContent = generatePopupHTML();
+  
+  injectPopupAnimations(css);
+
+  const popupOptions = {
+    closeButton: true,
+    closeOnClick: false,
+    className: 'weather-popup-themed'
+  };
+  
+  if (isMobile) {
+    popupOptions.offset = [0, -20];
+    popupOptions.maxWidth = '260px';
+    popupOptions.anchor = 'bottom';
+  } else {
+    popupOptions.offset = [0, -15];
+    popupOptions.maxWidth = '300px';
   }
   
+  const popup = new maptilersdk.Popup(popupOptions).setHTML(popupContent);
+  marker.setPopup(popup);
+
+  // ✅ PRIDAJ EVENT LISTENER PO ZOBRAZENÍ
+  popup.on('open', () => {
+    attachDetailButtonListener();
+  });
+    
+  setTimeout(() => {
+    marker.togglePopup();
+  }, 2200);
+}
+
   // Update existing popup with new theme
-  export function updateTheme() {
+  /* export function updateTheme() {
     if (!marker) return;
     
     const currentPopup = marker.getPopup();
@@ -608,10 +648,53 @@
     
     // Update CSS styles
     updatePopupStyles(css);
+  } */
+ // 🔄 UPRAVENÁ updateTheme funkcia
+export function updateTheme() {
+  if (!marker) return;
+  
+  const currentPopup = marker.getPopup();
+  if (!currentPopup || !currentPopup.isOpen()) return;
+  
+  const css = getCSSVariables();
+  const popupContent = generatePopupHTML();
+  
+  // Update popup content
+  currentPopup.setHTML(popupContent);
+  
+  // Update CSS styles
+  updatePopupStyles(css);
+  
+  // 🆕 KĽÚČOVÉ: Re-attach event listener po theme change!
+  attachDetailButtonListener();
+}
+
+
+  // 🆕 PRIDAJ novú funkciu pre pripojenie event listenera
+  function attachDetailButtonListener() {
+    setTimeout(() => {
+      const detailBtn = document.getElementById('popup-detail-btn');
+      if (detailBtn) {
+        // ❌ Odstráň starý listener (ak existuje)
+        detailBtn.removeEventListener('click', handleDetailClick);
+        
+        // ✅ Pridaj nový listener
+        detailBtn.addEventListener('click', handleDetailClick);
+        
+        console.log('✅ Detail button listener attached');
+      }
+    }, 100);
+  }
+
+  // 🆕 SEPARÁTNA funkcia pre click handling
+  function handleDetailClick(e) {
+    e.stopPropagation();
+    console.log('🖱️ Detail button clicked!');
+    onToggleDetailPanel(); // Volaj parent funkciu
   }
   
   // Listen for theme changes
-  onMount(() => {
+  /* onMount(() => {
     const handleThemeChange = () => {
       updateTheme();
     };
@@ -621,7 +704,26 @@
     return () => {
       window.removeEventListener('themeChanged', handleThemeChange);
     };
-  });
+  }); */
+  // 🔄 UPRAVENÁ onMount sekcia
+onMount(() => {
+  const handleThemeChange = () => {
+    console.log('🎨 Theme changed, updating popup...');
+    updateTheme();
+  };
+  
+  window.addEventListener('themeChanged', handleThemeChange);
+  
+  return () => {
+    window.removeEventListener('themeChanged', handleThemeChange);
+    
+    // ✅ Cleanup: Odstráň detail button listener
+    const detailBtn = document.getElementById('popup-detail-btn');
+    if (detailBtn) {
+      detailBtn.removeEventListener('click', handleDetailClick);
+    }
+  };
+});
   
   // Cleanup on destroy
   onDestroy(() => {
