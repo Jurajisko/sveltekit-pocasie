@@ -8,7 +8,7 @@
   "forecast_5day": "5-day forecast",
   "forecast_7day": "7-day forecast",
   "hourly_forecast": "Hourly forecast (24h)",
-  "detail_charts": "Detailed charts & statistics",
+  "detail_charts": "Forecast",
   "show_detail": "Show detailed charts",
   "statistics": "Statistics",
   "current_weather": "Current weather",
@@ -41,5 +41,7 @@
   "saved_places_nav": "Click to navigate",
   "saved_places_set_primary": "Set as primary",
   "saved_places_delete": "Delete place",
-  "saved_places_footer": "🏠 = loads on app start"
+  "saved_places_footer": "🏠 = loads on app start",
+  "settings": "Settings",
+  "temperature_unit": "Temperature unit"
 }

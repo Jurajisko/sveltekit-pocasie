@@ -8,7 +8,7 @@
   "forecast_5day": "5-dňová predpoveď",
   "forecast_7day": "7-dňová predpoveď",
   "hourly_forecast": "Hodinová predpoveď (24h)",
-  "detail_charts": "Detailné grafy a štatistiky",
+  "detail_charts": "Predpoveď",
   "show_detail": "Zobraziť detailné grafy",
   "statistics": "Štatistiky",
   "current_weather": "Aktuálne počasie",
@@ -41,5 +41,7 @@
   "saved_places_nav": "Klikni pre navigáciu",
   "saved_places_set_primary": "Nastaviť ako primárnu",
   "saved_places_delete": "Zmazať miesto",
-  "saved_places_footer": "🏠 = načíta sa pri štarte apky"
+  "saved_places_footer": "🏠 = načíta sa pri štarte apky",
+  "settings": "Nastavenia",
+  "temperature_unit": "Jednotka teploty"
 }

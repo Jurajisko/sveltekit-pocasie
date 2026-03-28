@@ -8,7 +8,7 @@
   "forecast_5day": "5-Tage-Vorhersage",
   "forecast_7day": "7-Tage-Vorhersage",
   "hourly_forecast": "Stundenvorhersage (24h)",
-  "detail_charts": "Detaillierte Diagramme & Statistiken",
+  "detail_charts": "Vorhersage",
   "show_detail": "Detaillierte Diagramme anzeigen",
   "statistics": "Statistiken",
   "current_weather": "Aktuelles Wetter",
@@ -41,5 +41,7 @@
   "saved_places_nav": "Zum Navigieren klicken",
   "saved_places_set_primary": "Als primär festlegen",
   "saved_places_delete": "Ort löschen",
-  "saved_places_footer": "🏠 = wird beim App-Start geladen"
+  "saved_places_footer": "🏠 = wird beim App-Start geladen",
+  "settings": "Einstellungen",
+  "temperature_unit": "Temperatureinheit"
 }
