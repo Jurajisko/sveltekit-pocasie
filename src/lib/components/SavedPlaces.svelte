@@ -106,7 +106,7 @@
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.5);
-    z-index: 800;
+    z-index: 1000;
   }
 
   .sp-drawer {
@@ -119,7 +119,7 @@
     background: var(--bg-primary, rgba(15, 20, 35, 0.98));
     border-left: 1px solid var(--border-primary, rgba(0,255,255,0.3));
     box-shadow: -8px 0 40px rgba(0,0,0,0.5);
-    z-index: 900;
+    z-index: 1001;
     display: flex;
     flex-direction: column;
     transform: translateX(100%);

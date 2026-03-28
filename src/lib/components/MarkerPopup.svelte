@@ -2,6 +2,23 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { getWeatherIcon } from '$lib/utils/weatherIcons.js';
+  import { i18n } from '$lib/i18n/index.js';
+  import { currentLanguage } from '$lib/stores/language.js';
+  import { temperatureUnit, convertTemp, unitSymbol } from '$lib/stores/temperatureUnit.js';
+
+  let currentUnit = 'celsius';
+  temperatureUnit.subscribe(v => { currentUnit = v; });
+
+  $: t = $i18n;
+
+  // Pri zmene jazyka alebo jednotky teploty regeneruj popup
+  $: if ($currentLanguage) {
+    updateTheme();
+  }
+  $: if ($temperatureUnit) {
+    currentUnit = $temperatureUnit;
+    updateTheme();
+  }
   
   // Props
   export let marker = null;
@@ -11,6 +28,7 @@
 
   // Extend BTN
   export let onToggleDetailPanel = () => {};
+  export let onSavePlace = () => {};
   
   let popupAnimationStyle = null;
 
@@ -46,7 +64,22 @@
     const css = getCSSVariables();
     
     return `
-      <div style="
+      <style>
+        @media (orientation: landscape) and (max-width: 991px) {
+          .mz-popup { padding: 12px 16px !important; }
+          .mz-row1 { display: flex !important; align-items: center; gap: 10px; margin-bottom: 10px !important; }
+          .mz-logo { margin-bottom: 0 !important; flex-shrink: 0; }
+          .mz-logo svg { width: 100px !important; height: 32px !important; }
+          .mz-header { margin-bottom: 0 !important; padding-right: 0 !important; flex: 1; min-width: 0; }
+          .mz-header-name { font-size: 15px !important; }
+          .mz-buttons { position: static !important; flex-shrink: 0; }
+          .mz-btn-detail { width: 36px !important; height: 36px !important; font-size: 18px !important; }
+          .mz-btn-save { width: 30px !important; height: 30px !important; font-size: 14px !important; }
+          .mz-weather { display: none !important; }
+          .mz-details { display: none !important; }
+        }
+      </style>
+      <div class="mz-popup" style="
           padding: 20px;
           position: relative;
           min-width: 240px;
@@ -60,17 +93,60 @@
           overflow: hidden;
           transition: all 0.3s ease;
       ">
+          <div class="mz-row1">
+          <!-- LOGO -->
+          <div class="mz-logo" style="display: flex; justify-content: center; margin-bottom: 20px;">
+            <svg width="160" height="50" viewBox="0 0 180 56" xmlns="http://www.w3.org/2000/svg">
+              <style>
+                @keyframes mz-show-d1 { 0%{opacity:1}33%{opacity:1}44%{opacity:0}78%{opacity:0}89%{opacity:1}100%{opacity:1} }
+                @keyframes mz-show-combo { 0%{opacity:0}33%{opacity:0}44%{opacity:1}78%{opacity:1}89%{opacity:0}100%{opacity:0} }
+                @keyframes mz-ping-out { 0%{opacity:0}10%{opacity:1}60%{opacity:.25}100%{opacity:0} }
+                @keyframes mz-dot-beat { 0%,100%{opacity:1}40%{opacity:.4} }
+                @keyframes mz-wind-draw { 0%{stroke-dashoffset:65;opacity:0}15%{opacity:.9}70%{stroke-dashoffset:0;opacity:.9}90%{opacity:0}100%{stroke-dashoffset:0;opacity:0} }
+                .mz-d1{animation:mz-show-d1 9s ease-in-out infinite}
+                .mz-combo{animation:mz-show-combo 9s ease-in-out infinite}
+                .mz-arc-ping1{animation:mz-ping-out 2.4s ease-out infinite .4s}
+                .mz-arc-ping2{animation:mz-ping-out 2.4s ease-out infinite .2s}
+                .mz-arc-ping3{animation:mz-ping-out 2.4s ease-out infinite 0s}
+                .mz-dot{animation:mz-dot-beat 2.4s ease-in-out infinite}
+                .mz-w1{stroke-dasharray:65;animation:mz-wind-draw 2.4s ease-in-out infinite 0s}
+                .mz-w2{stroke-dasharray:60;animation:mz-wind-draw 2.4s ease-in-out infinite .28s}
+              </style>
+              <g class="mz-d1">
+                <line x1="14" y1="7" x2="11" y2="17" stroke="${css.primaryColor}" stroke-width="2.2" stroke-linecap="round" opacity="0.55"/>
+                <line x1="24" y1="4" x2="21" y2="14" stroke="${css.primaryColor}" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
+                <line x1="34" y1="7" x2="31" y2="17" stroke="${css.primaryColor}" stroke-width="2.2" stroke-linecap="round" opacity="0.55"/>
+                <path d="M22 46 A20 20 0 0 1 42 26" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round" opacity="0.28"/>
+                <path d="M22 46 A13 13 0 0 1 35 33" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round" opacity="0.6"/>
+                <path d="M22 46 A6 6 0 0 1 28 40" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round" opacity="1"/>
+              </g>
+              <g class="mz-combo">
+                <path class="mz-w1" d="M8 10 Q19 3 30 10 Q40 17 50 10" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round"/>
+                <path class="mz-w2" d="M8 20 Q21 13 33 20 Q43 27 52 19" fill="none" stroke="${css.primaryColor}" stroke-width="2.2" stroke-linecap="round"/>
+                <path class="mz-arc-ping1" d="M22 46 A20 20 0 0 1 42 26" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round"/>
+                <path class="mz-arc-ping2" d="M22 46 A13 13 0 0 1 35 33" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round"/>
+                <path class="mz-arc-ping3" d="M22 46 A6 6 0 0 1 28 40" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round"/>
+              </g>
+              <circle class="mz-dot" cx="22" cy="46" r="3.5" fill="${css.primaryColor}"/>
+              <text x="62" y="26" font-family="Segoe UI,system-ui" font-weight="700" font-size="20" fill="#ffffff" letter-spacing="0.5">Meteo</text>
+              <text x="62" y="49" font-family="Segoe UI,system-ui" font-weight="700" font-size="20" fill="${css.primaryColor}" letter-spacing="0.5">Zoomy</text>
+            </svg>
+          </div>
+
+          </div><!-- end mz-row1 -->
+
            <!-- HEADER s novým tlačidlom -->
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-right: 30px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 16px; filter: drop-shadow(0 0 8px ${css.primaryColor});">📍</span>
-              <span style="padding-right: 7px; font-size: 16px; font-weight: 700; color: ${css.textPrimary}; background: ${css.gradient1}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">${locationName}</span>
+          <div class="mz-header" style="position: relative; margin-bottom: 30px; padding-right: 96px;">
+            <div style="display: flex; align-items: flex-start; gap: 6px;">
+              <span style="font-size: 15px; flex-shrink: 0; margin-top: 3px; filter: drop-shadow(0 0 8px ${css.primaryColor});">📍</span>
+              <span class="mz-header-name" style="font-size: 20px; line-height: 1.3; font-weight: 700; background: ${css.gradient1}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; word-break: break-word;">${locationName}</span>
             </div>
-            
-            <div style="display: flex; align-items: center; gap: 8px;">
+
+            <div class="mz-buttons" style="position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 6px;">
               <!-- NOVÉ TLAČIDLO PRE DETAIL PANEL -->
               <button
                 id="popup-detail-btn"
+                class="mz-btn-detail"
                 style="
                   /* === ZÁKLADNÉ VLASTNOSTI === */
                   background: ${css.bgPrimary};
@@ -160,14 +236,35 @@
                 }
               </style>
               
-              <div style="font-size: 12px; color: ${css.textSecondary}; font-weight: 600; background: ${css.bgGlass}; padding: 4px 8px; border-radius: 8px; border: 1px solid ${css.borderSecondary};">
-                ${new Date(weatherData.current.time).toLocaleTimeString('sk', {hour: '2-digit', minute: '2-digit'})}
-              </div>
+              <button
+                id="popup-save-btn"
+                class="mz-btn-save"
+                style="
+                  background: ${css.bgGlass};
+                  border: 1px solid ${css.borderSecondary};
+                  color: ${css.textSecondary};
+                  border-radius: 8px;
+                  cursor: pointer;
+                  font-size: 18px;
+                  width: 36px;
+                  height: 36px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  transition: all 0.2s;
+                  -webkit-tap-highlight-color: transparent;
+                "
+                ontouchstart="this.style.transform='scale(0.9)'"
+                ontouchend="this.style.transform='scale(1)'"
+                onmouseover="this.style.borderColor='${css.primaryColor}'; this.style.color='${css.primaryColor}';"
+                onmouseout="this.style.borderColor='${css.borderSecondary}'; this.style.color='${css.textSecondary}';"
+                title="Uložiť miesto"
+              >⭐</button>
             </div>
           </div>
               
           <!-- MAIN WEATHER -->
-          <div style="
+          <div class="mz-weather" style="
               display: flex;
               align-items: center;
               gap: 16px;
@@ -178,6 +275,7 @@
               border: 1px solid ${css.borderPrimary};
               position: relative;
               backdrop-filter: blur(10px);
+              overflow: hidden;
           ">
               <div style="
                   position: absolute;
@@ -187,15 +285,15 @@
                   height: 2px;
                   background: ${css.gradient1};
               "></div>
-              
-              <div style="
+
+              <div class="mz-weather-icon" style="
                   font-size: 42px;
                   filter: drop-shadow(0 0 15px ${css.primaryColor});
                   animation: iconFloat 3s ease-in-out infinite;
               ">${icon}</div>
               
               <div style="flex: 1;">
-                  <div style="
+                  <div class="mz-weather-temp" style="
                       font-size: 32px;
                       font-weight: 800;
                       line-height: 1;
@@ -205,20 +303,20 @@
                       background-clip: text;
                       margin-bottom: 4px;
                   ">
-                      ${weatherData.current.temp}<span style="font-size: 20px; opacity: 0.8;">°C</span>
+                      ${convertTemp(weatherData.current.temp, currentUnit)}<span style="font-size: 20px; opacity: 0.8;">${unitSymbol(currentUnit)}</span>
                   </div>
-                  <div style="
+                  <div class="mz-weather-label" style="
                       font-size: 13px;
                       color: ${css.textSecondary};
                       font-weight: 600;
                       text-transform: uppercase;
                       letter-spacing: 0.5px;
-                  ">Aktuálne počasie</div>
+                  ">${t('current_weather')}</div>
               </div>
           </div>
           
           <!-- DETAILS -->
-          <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="mz-details" style="display: flex; flex-direction: column; gap: 12px;">
               <div style="
                   display: flex;
                   align-items: center;
@@ -245,7 +343,7 @@
                           font-size: 13px;
                           color: ${css.textSecondary};
                           font-weight: 600;
-                      ">Vietor</span>
+                      ">${t('wind')}</span>
                       <span style="
                           font-size: 14px;
                           color: ${css.textPrimary};
@@ -284,7 +382,7 @@
                           font-size: 13px;
                           color: ${css.textSecondary};
                           font-weight: 600;
-                      ">Tlak</span>
+                      ">${t('pressure')}</span>
                       <span style="
                           font-size: 14px;
                           color: ${css.textPrimary};
@@ -323,7 +421,7 @@
                           font-size: 13px;
                           color: ${css.textSecondary};
                           font-weight: 600;
-                      ">Pocit</span>
+                      ">${t('feels_like')}</span>
                       <span style="
                           font-size: 14px;
                           color: ${css.textPrimary};
@@ -332,7 +430,7 @@
                           -webkit-background-clip: text;
                           -webkit-text-fill-color: transparent;
                           background-clip: text;
-                      ">${weatherData.current.temp}°C</span>
+                      ">${convertTemp(weatherData.current.temp, currentUnit)}${unitSymbol(currentUnit)}</span>
                   </div>
               </div>
           </div>
@@ -423,7 +521,7 @@
               }
               
               /* MOBILE SPECIFIC */
-              @media (max-width: 1195px) {
+              @media (max-width: 1195px) and (orientation: portrait) {
                   .weather-popup-themed .maplibregl-popup-content {
                       max-width: 260px !important;
                       transform: none !important;
@@ -470,7 +568,7 @@
               
               .maplibregl-popup,
               .weather-popup-themed {
-                z-index: 9 !important;
+                z-index: 999 !important;
               }
 
           `;
@@ -605,10 +703,12 @@ export function createPopup() {
     className: 'weather-popup-themed'
   };
   
+  const isLandscape = window.innerWidth > window.innerHeight;
+
   if (isMobile) {
-    popupOptions.offset = [0, -20];
-    popupOptions.maxWidth = '260px';
+    popupOptions.maxWidth = isLandscape ? '9999px' : '270px';
     popupOptions.anchor = 'bottom';
+    popupOptions.offset = isLandscape ? [0, -180] : [0, 0];
   } else {
     popupOptions.offset = [0, -15];
     popupOptions.maxWidth = '300px';
@@ -620,11 +720,78 @@ export function createPopup() {
   // ✅ PRIDAJ EVENT LISTENER PO ZOBRAZENÍ
   popup.on('open', () => {
     attachDetailButtonListener();
+    removeMiniBar();
+    const pd = document.getElementById('pointer-data');
+    if (pd) pd.style.display = 'none';
+
+    // Po vykreslení skontroluj či je popup celý viditeľný, ak nie — dopannuj mapu
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const popupEl = popup.getElement();
+        if (!popupEl) return;
+        const rect = popupEl.getBoundingClientRect();
+        const margin = 8;
+        let panX = 0;
+        let panY = 0;
+        if (rect.top < margin) panY = rect.top - margin;
+        if (rect.left < margin) panX = rect.left - margin;
+        if (rect.right > window.innerWidth - margin) panX = rect.right - window.innerWidth + margin;
+        if (panX !== 0 || panY !== 0) {
+          const map = marker?.getMap?.();
+          if (map) map.panBy([panX, panY], { duration: 350 });
+        }
+      });
+    });
   });
-    
+
+  popup.on('close', () => {
+    showMiniBar();
+    const pd = document.getElementById('pointer-data');
+    if (pd) pd.style.display = '';
+  });
+
   setTimeout(() => {
     marker.togglePopup();
   }, 2200);
+}
+
+function showMiniBar() {
+  removeMiniBar();
+  const bar = document.createElement('div');
+  bar.id = 'popup-mini-bar';
+  bar.innerHTML = `<span style="font-size:14px;">📍</span> <span style="font-weight:700;">${locationName}</span> <span style="opacity:0.6;font-size:12px;">▲</span>`;
+  bar.style.cssText = `
+    position: fixed;
+    bottom: 210px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-primary, rgba(26,35,50,0.95));
+    border: 1px solid var(--border-primary, rgba(0,255,255,0.3));
+    color: var(--text-primary, #fff);
+    padding: 11px 18px;
+    border-radius: 20px;
+    cursor: pointer;
+    z-index: 998;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    backdrop-filter: blur(10px);
+    font-family: system-ui;
+    font-size: 14px;
+    white-space: nowrap;
+  `;
+  bar.addEventListener('click', () => {
+    if (marker) {
+      marker.togglePopup();
+    }
+  });
+  document.body.appendChild(bar);
+}
+
+export function removeMiniBar() {
+  const bar = document.getElementById('popup-mini-bar');
+  if (bar) bar.remove();
 }
 
   // Update existing popup with new theme
@@ -669,15 +836,36 @@ export function updateTheme() {
     setTimeout(() => {
       const detailBtn = document.getElementById('popup-detail-btn');
       if (detailBtn) {
-        // ❌ Odstráň starý listener (ak existuje)
         detailBtn.removeEventListener('click', handleDetailClick);
-        
-        // ✅ Pridaj nový listener
         detailBtn.addEventListener('click', handleDetailClick);
-        
-        console.log('✅ Detail button listener attached');
+      }
+
+      const saveBtn = document.getElementById('popup-save-btn');
+      if (saveBtn) {
+        saveBtn.removeEventListener('click', handleSaveClick);
+        saveBtn.addEventListener('click', handleSaveClick);
       }
     }, 100);
+  }
+
+  function handleSaveClick(e) {
+    e.stopPropagation();
+    onSavePlace();
+    const saveBtn = document.getElementById('popup-save-btn');
+    if (saveBtn) {
+      saveBtn.innerText = '✓';
+      saveBtn.style.color = '#22c55e';
+      saveBtn.style.borderColor = '#22c55e';
+      saveBtn.style.fontSize = '16px';
+      saveBtn.style.fontWeight = '700';
+      setTimeout(() => {
+        saveBtn.innerText = '⭐';
+        saveBtn.style.color = '#f59e0b';
+        saveBtn.style.borderColor = '#f59e0b';
+        saveBtn.style.fontSize = '18px';
+        saveBtn.style.fontWeight = 'normal';
+      }, 2000);
+    }
   }
 
   // 🆕 SEPARÁTNA funkcia pre click handling
