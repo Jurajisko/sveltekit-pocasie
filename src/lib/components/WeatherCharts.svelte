@@ -3,52 +3,24 @@
   import { getWeatherIcon } from '$lib/utils/weatherIcons.js';
   import { i18n } from '$lib/i18n/index.js';
   import { currentLanguage } from '$lib/stores/language.js';
+  import { temperatureUnit, convertTemp, unitSymbol } from '$lib/stores/temperatureUnit.js';
 
   $: t = $i18n;
   $: lang = $currentLanguage;
+  $: unit = $temperatureUnit;
 
   export let weatherData = null;
-  
-  // Temperature unit state
-  let temperatureUnit = 'celsius'; // 'celsius' or 'fahrenheit'
-  
-  // Switch temperature unit
-  function switchTemperatureUnit(unit) {
-    temperatureUnit = unit;
-    // Trigger re-fetch with new unit
-    if (weatherData?.extended) {
-      dispatchUnitChange(unit);
-    }
-  }
-  
-  // Dispatch event to parent component to re-fetch weather data
-  function dispatchUnitChange(unit) {
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('temperatureUnitChanged', { 
-        detail: { unit } 
-      }));
-    }
-  }
-  
-  // Convert temperature for display (if needed as fallback)
-  function convertTemp(tempC) {
-    if (temperatureUnit === 'fahrenheit') {
-      return Math.round((tempC * 9/5) + 32);
-    }
-    return Math.round(tempC);
-  }
-  
-  // Get unit symbol
+
   function getUnitSymbol() {
-    return temperatureUnit === 'fahrenheit' ? '°F' : '°C';
+    return unitSymbol(unit);
   }
-  
+
   // Extract data from weatherData with temperature conversion
   $: temperatureData = weatherData?.extended?.daily ? 
     weatherData.extended.daily.time.slice(0, 7).map((time, i) => ({
       day: new Date(time).toLocaleDateString(lang, {weekday: 'short'}),
-      max: convertTemp(weatherData.extended.daily.temperature_2m_max[i]),
-      min: convertTemp(weatherData.extended.daily.temperature_2m_min[i]),
+      max: convertTemp(weatherData.extended.daily.temperature_2m_max[i], unit),
+      min: convertTemp(weatherData.extended.daily.temperature_2m_min[i], unit),
        time: time  // ✅ PRIDAJ TOTO!
     })) : [];
     
@@ -139,23 +111,13 @@
 {:else}
 
 <!-- 🌡️ TEMPERATURE CHART - Consistent with weather-display -->
-<div class="chart-container">
+<div class="chart-container" id="section-forecast-7day">
   <div class="chart-header">
-    <h3>{t('forecast_7day')}</h3>
-    <div class="temp-switch">
-      <button 
-        class:active={temperatureUnit === 'celsius'}
-        on:click={() => switchTemperatureUnit('celsius')}
-      >
-        °C
-      </button>
-      <button 
-        class:active={temperatureUnit === 'fahrenheit'}
-        on:click={() => switchTemperatureUnit('fahrenheit')}
-      >
-        °F
-      </button>
-    </div>
+    <h3>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      {t('forecast_7day')}
+    </h3>
+    <div class="unit-label">{getUnitSymbol()}</div>
   </div>
   
   <div class="temp-chart-wrapper">
@@ -219,7 +181,7 @@
           
           <!-- Precipitation chance at bottom -->
           {#if precipitationData[i] && precipitationData[i].chance > 0}
-            <div class="precip-chance" style="position: absolute; bottom: -45px; left: 50%; transform: translateX(-50%);">
+            <div class="precip-chance" style="position: absolute; bottom: -50px; left: 50%; transform: translateX(-50%);">
               <span class="rain-icon">💧</span>
               {precipitationData[i].chance}%
             </div>
@@ -231,9 +193,12 @@
 </div>
 
 <!-- 🌧️ PRECIPITATION CHART - Consistent styling -->
-<div class="chart-container">
+<div class="chart-container" id="section-precipitation">
   <div class="chart-header">
-    <h3>{t('precipitation')}</h3>
+    <h3>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="19" x2="8" y2="21"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="16" y1="19" x2="16" y2="21"/><line x1="16" y1="13" x2="16" y2="15"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="12" y1="15" x2="12" y2="17"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>
+      {t('precipitation')}
+    </h3>
     <div class="unit-label">mm</div>
   </div>
   
@@ -262,9 +227,12 @@
 </div>
 
 <!-- 💨 WIND CHART - Consistent styling -->
-<div class="chart-container">
+<div class="chart-container" id="section-wind">
   <div class="chart-header">
-    <h3>{t('wind')}</h3>
+    <h3>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>
+      {t('wind')}
+    </h3>
     <div class="unit-label">m/s</div>
   </div>
   

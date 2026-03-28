@@ -1170,7 +1170,8 @@ body {
 .detail-content {
   display: flex;
   box-sizing: border-box;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   max-height: 100%;
   flex-direction: column;
   width: 100%;
@@ -1542,8 +1543,9 @@ body {
   }
   
   .temp-min {
-    color: var(--text-secondary);
-    font-weight: 500;
+    color: #7dd3fc;
+    font-weight: 600;
+    text-shadow: 0 0 4px rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.6);
   }
   
   /* === ANIMATIONS === */
@@ -1633,16 +1635,30 @@ body {
 }
   
 
+/* mobil landscape — skryť legendu */
+@media (orientation: landscape) and (max-width: 991px) {
+  .legend {
+    display: none !important;
+  }
+}
+
 /* 📱 MOBILE POPUP POSITIONING */
-@media (max-width: 1195px) {
+@media (max-width: 1195px) and (orientation: portrait) {
     .weather-popup-themed .maplibregl-popup-content {
         max-width: 260px !important;
-        transform: translateY(-30px) !important; /* Posun popup vyššie */
+        transform: translateY(-30px) !important;
     }
-    
+
     .weather-popup-themed .maplibregl-popup-tip {
-        /* Dlhší "tip" pre lepšie spojenie */
         border-width: 20px 12px 0 12px !important;
+    }
+}
+
+/* 📱 MOBILE LANDSCAPE — odstrániť max-width úplne */
+@media (max-width: 991px) and (orientation: landscape) {
+    .weather-popup-themed .maplibregl-popup-content {
+        max-width: none !important;
+        width: auto !important;
     }
 }
 
@@ -1683,10 +1699,20 @@ body {
   
   .chart-header h3 {
     color: var(--text-primary);
-    font-size: 18px;
+    font-size: 21px;
     font-weight: 600;
     margin: 0;
     text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chart-header h3 svg {
+    flex-shrink: 0;
+    color: var(--primary-color);
+    width: 20px;
+    height: 20px;
   }
   
   .temp-switch {
@@ -1726,12 +1752,10 @@ body {
   
   /* 🌡️ TEMPERATURE CHART */
   .temp-chart-wrapper {
-    background: var(--gradient-2);
-    border: 1px solid var(--border-secondary);
-    border-radius: 16px;
-    padding: 50px 16px 60px 16px;
+    padding: 30px 16px 20px 16px;
     backdrop-filter: blur(5px);
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: visible;
   }
   
   .temp-chart {
@@ -1751,8 +1775,8 @@ body {
   }
   
   .day-label {
-    color: var(--text-secondary);
-    font-size: 13px;
+    color: var(--text-primary);
+    font-size: 14px;
     font-weight: 600;
     letter-spacing: 0.5px;
     position: absolute;
@@ -1763,14 +1787,14 @@ body {
   }
   
   .weather-icon-day {
-    font-size: 22px;
+    font-size: 1.375rem;
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
     position: absolute;
     z-index: 3;
   }
   
   .weather-icon-night {
-    font-size: 18px;
+    font-size: 1.375rem;
     filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
     opacity: 0.8;
     position: absolute;
@@ -1819,10 +1843,10 @@ body {
   }
   
   .temp-min {
-    color: var(--text-secondary);
+    color: #7dd3fc;
     font-size: 14px;
     font-weight: 600;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    text-shadow: 0 0 4px rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.6);
     position: absolute;
     left: 50%;
     transform: translateX(-50%) translateY(-50%);
@@ -1831,8 +1855,8 @@ body {
   }
   
   .precip-chance {
-    color: var(--text-secondary);
-    font-size: 12px;
+    color: var(--text-primary);
+    font-size: 14px;
     font-weight: 500;
     display: flex;
     align-items: center;
@@ -1852,7 +1876,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: end;
-    height: 120px;
+    height: 125px;
     gap: 12px;
     padding: 0 8px;
   }
@@ -1867,7 +1891,7 @@ body {
   
   .precip-value {
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     margin-bottom: 8px;
     text-shadow: 0 1px 2px rgba(0,0,0,0.3);
@@ -1900,8 +1924,8 @@ body {
   }
   
   .precip-day {
-    color: var(--text-secondary);
-    font-size: 10px;
+    color: var(--text-primary);
+    font-size: 14px;
     font-weight: 600;
     margin-top: 8px;
     letter-spacing: 0.5px;
@@ -1928,7 +1952,7 @@ body {
   
   .wind-value {
     color: var(--text-primary);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     text-shadow: 0 1px 2px rgba(0,0,0,0.3);
   }
@@ -1965,8 +1989,8 @@ body {
   }
   
   .wind-day {
-    color: var(--text-secondary);
-    font-size: 10px;
+    color: var(--text-primary);
+    font-size: 14px;
     font-weight: 600;
     letter-spacing: 0.5px;
   }
@@ -2021,7 +2045,7 @@ body {
   /* 📱 RESPONSIVE */
   @media (max-width: 1195px) {
     .chart-container {
-      padding: 16px;
+      padding: 16px 11px;
       margin-bottom: 16px;
     }
     
@@ -2035,11 +2059,11 @@ body {
     }
     
     .temp-max, .precip-value, .wind-value {
-      font-size: 12px;
+      font-size: 14px;
     }
     
     .temp-min, .precip-day, .wind-day {
-      font-size: 9px;
+      font-size: 14px;
     }
     
     .temp-bar-container {
@@ -2059,15 +2083,11 @@ body {
   
   @media (max-width: 480px) {
     .chart-header h3 {
-      font-size: 16px;
-    }
-    
-    .temp-chart {
-      /* height: 140px; */
+      font-size: 21px;
     }
     
     .precip-chart, .wind-chart {
-      height: 80px;
+      height: 125px;
     }
   }
 
@@ -2078,3 +2098,66 @@ body {
       display: none;
     }
   }
+
+  /* 📱 MOBILE: scrollovateľné grafy */
+  @media (max-width: 991px) {
+    .temp-chart-wrapper {
+      padding: 30px 8px 28px 8px;
+      scrollbar-width: none;
+    }
+    .temp-chart-wrapper::-webkit-scrollbar {
+      display: none;
+    }
+
+    .temp-chart {
+      justify-content: space-evenly;
+      min-width: max-content;
+    }
+
+    .temp-day-column {
+      flex: 0 0 68px;
+      min-height: 280px;
+    }
+
+    .day-label {
+      font-size: 14px;
+      bottom: -26px;
+    }
+
+    .temp-max {
+      font-size: 14px;
+    }
+
+    .temp-min {
+      font-size: 14px;
+    }
+
+    .weather-icon-day {
+      font-size: 26px;
+    }
+
+    .weather-icon-night {
+      font-size: 26px;
+    }
+
+    .precip-chart,
+    .wind-chart {
+      overflow-x: auto;
+      scrollbar-width: none;
+      justify-content: flex-start;
+    }
+    .precip-chart::-webkit-scrollbar,
+    .wind-chart::-webkit-scrollbar {
+      display: none;
+    }
+
+    .precip-column,
+    .wind-column {
+      flex: 0 0 60px;
+    }
+  }
+
+
+#section-forecast-7day .temp-chart-wrapper {
+  padding-bottom: 60px;
+}

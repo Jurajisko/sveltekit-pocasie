@@ -1,6 +1,7 @@
 <!-- src/lib/components/Fix.svelte -->
 <script>
-  import { onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
+  import { AdMob, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
   import TimeSlider from '$lib/components/TimeSlider.svelte';
   import WeatherCharts from '$lib/components/WeatherCharts.svelte';
   import MarkerPopup from '$lib/components/MarkerPopup.svelte';
@@ -13,9 +14,47 @@
   import SavedPlaces from '$lib/components/SavedPlaces.svelte';
   import { savedPlaces } from '$lib/stores/savedPlaces.js';
   import { switchLanguage } from '$lib/stores/language.js';
+  import { temperatureUnit, convertTemp, unitSymbol } from '$lib/stores/temperatureUnit.js';
+  import {
+    addInlineAdaptiveBannerListener,
+    destroyInlineAdaptiveBanner,
+    initializeInlineAdaptiveBanner,
+    showInlineAdaptiveBanner,
+    supportsInlineAdaptiveBanner,
+    updateInlineAdaptiveBanner
+  } from '$lib/plugins/inlineAdaptiveBanner.js';
 
   $: t = $i18n;
   $: lang = $currentLanguage;
+  $: unit = $temperatureUnit;
+
+  function getUVColor(uv) {
+    if (uv <= 2) return '#4caf50';
+    if (uv <= 5) return '#ffeb3b';
+    if (uv <= 7) return '#ff9800';
+    if (uv <= 10) return '#f44336';
+    return '#9c27b0';
+  }
+
+  function getWindArrow(deg) {
+    if (deg === undefined || deg === null) return '–';
+    const dirs = ['↑','↗','→','↘','↓','↙','←','↖'];
+    return dirs[Math.round(deg / 45) % 8];
+  }
+
+  function formatTime(isoStr) {
+    if (!isoStr) return '';
+    return isoStr.slice(11, 16);
+  }
+
+  function getTimeOfDay(timeStr) {
+    // timeStr = "08:00"
+    const h = parseInt(timeStr);
+    if (h >= 5 && h < 10) return 'morning';   // 05–09 ráno
+    if (h >= 10 && h < 18) return 'day';       // 10–17 deň
+    if (h >= 18 && h < 20) return 'evening';   // 18–19 večer
+    return 'night';                             // 20–04 noc
+  }
 
   // Preregeneruj dayMarkers pri zmene jazyka
   $: if (lang && minTime && maxTime) {
@@ -57,7 +96,7 @@
   let showLangPicker = false;
   let showSavedPlaces = false;
 
-  onMount(() => {
+  onMount(async () => {
     if (typeof localStorage !== 'undefined') {
       const savedTheme = localStorage.getItem('weather-app-theme') || 'cyan';
       handleThemeChange(savedTheme);
@@ -68,6 +107,49 @@
         showLangPicker = true;
       }
     }
+
+    // Inicializácia natívneho AdMob bannera dole na mape
+    try {
+      await AdMob.initialize({ testingDevices: ['3f43eef5'] });
+      await initializeInlineAdaptiveBanner({ testingDevices: ['3f43eef5'] });
+      await AdMob.showBanner({
+        adId: 'ca-app-pub-3940256099942544/6300978111',
+        adSize: BannerAdSize.BANNER,
+        position: BannerAdPosition.BOTTOM_CENTER,
+        margin: 0,
+        isTesting: true
+      });
+    } catch (e) {
+      // Na webe sa AdMob nezobrazí - len na Android
+    }
+  });
+
+  onMount(() => {
+    if (!supportsInlineAdaptiveBanner()) {
+      return;
+    }
+
+    addInlineAdaptiveBannerListener('bannerLoaded', (event) => {
+      if (event.slotId) {
+        setInlineBannerHeight(event.slotId, event.height || getInlineBannerHeight(event.slotId) || 50);
+      }
+    }).then((listener) => {
+      inlineBannerLoadedListener = listener;
+    });
+
+    addInlineAdaptiveBannerListener('bannerFailed', (event) => {
+      if (event.slotId) {
+        console.warn('Inline adaptive banner failed', event.message);
+      }
+    }).then((listener) => {
+      inlineBannerFailedListener = listener;
+    });
+  });
+
+  onDestroy(() => {
+    stopInlineBanner();
+    inlineBannerLoadedListener?.remove?.();
+    inlineBannerFailedListener?.remove?.();
   });
 
   function pickLanguage(lang) {
@@ -97,6 +179,8 @@
   let dayMarkers = [];
   let timeText = '';
   let playLabel = '▶️';
+  let currentLat = null;
+  let currentLng = null;
 
   /** @type {Record<string, any>} */
   const weatherLayers = {
@@ -216,16 +300,20 @@ async function selectLocation(event) {
   const feature = event.detail;
   
   let lng, lat;
-  
+
   if (feature.center) {
     [lng, lat] = feature.center;
   } else if (feature.lon && feature.lat) {
     lng = parseFloat(feature.lon);
     lat = parseFloat(feature.lat);
+
   } else {
     console.error('Invalid location format:', feature);
     return;
   }
+
+  currentLat = lat;
+  currentLng = lng;
 
   const locationName = feature.place_name || feature.display_name || 'Vybraná lokácia';
   
@@ -273,7 +361,7 @@ async function selectLocation(event) {
     while (+current <= end) {
       markers.push({
         time: +current,
-        label: current.toLocaleDateString(lang, { weekday: 'long' })
+        label: current.toLocaleDateString(lang, { weekday: 'short' })
       });
       current.setUTCDate(current.getUTCDate() + 1);
     }
@@ -333,6 +421,162 @@ async function selectLocation(event) {
   $: hMinTemp = hourlyData.length ? Math.min(...hourlyData.map(h => h.temp)) : 0;
   $: hMaxTemp = hourlyData.length ? Math.max(...hourlyData.map(h => h.temp)) : 10;
   $: hRange = (hMaxTemp - hMinTemp) || 1;
+  let detailPanelEl;
+  let inlineBannerFrame = null;
+  let inlineBannerScrollHandler;
+  let inlineBannerResizeHandler;
+  let inlineBannerLoadedListener;
+  let inlineBannerFailedListener;
+  let inlineBannerResizeObserver;
+  let inlineStatsBannerEl;
+  let inlineHourlyBannerEl;
+  let inlineWeeklyBannerEl;
+  const inlineBannerConfigs = [
+    {
+      slotId: 'detail-inline-stats',
+      adUnitId: 'ca-app-pub-3940256099942544/9214589741',
+      label: 'Banner 1 - statistiky'
+    },
+    {
+      slotId: 'detail-inline-hourly',
+      adUnitId: 'ca-app-pub-3940256099942544/9214589741',
+      label: 'Banner 2 - hodinova predpoved'
+    },
+    {
+      slotId: 'detail-inline-weekly',
+      adUnitId: 'ca-app-pub-3940256099942544/9214589741',
+      label: 'Banner 3 - 7-denna predpoved'
+    }
+  ];
+  let inlineBannerHeights = {};
+  let inlineBannerMounted = {};
+
+  function getInlineBannerElement(slotId) {
+    if (slotId === 'detail-inline-stats') return inlineStatsBannerEl;
+    if (slotId === 'detail-inline-hourly') return inlineHourlyBannerEl;
+    if (slotId === 'detail-inline-weekly') return inlineWeeklyBannerEl;
+    return null;
+  }
+
+  function setInlineBannerHeight(slotId, height) {
+    inlineBannerHeights = { ...inlineBannerHeights, [slotId]: height };
+  }
+
+  function setInlineBannerMounted(slotId, mounted) {
+    inlineBannerMounted = { ...inlineBannerMounted, [slotId]: mounted };
+  }
+
+  function getInlineBannerHeight(slotId) {
+    return inlineBannerHeights[slotId] || 60;
+  }
+
+  function scheduleInlineBannerSync(forceReload = false) {
+    if (!supportsInlineAdaptiveBanner() || !showDetailPanel || !detailPanelEl) {
+      return;
+    }
+
+    if (inlineBannerFrame !== null) {
+      cancelAnimationFrame(inlineBannerFrame);
+    }
+
+    inlineBannerFrame = requestAnimationFrame(async () => {
+      inlineBannerFrame = null;
+
+      for (const config of inlineBannerConfigs) {
+        const element = getInlineBannerElement(config.slotId);
+        if (!element) {
+          continue;
+        }
+
+        const rect = element.getBoundingClientRect();
+        const width = Math.round(rect.width);
+        if (width < 200) {
+          continue;
+        }
+
+        const payload = {
+          slotId: config.slotId,
+          adUnitId: config.adUnitId,
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width,
+          maxHeight: Math.round(Math.min(window.innerHeight * 0.4, 320))
+        };
+
+        try {
+          if (!inlineBannerMounted[config.slotId] || forceReload) {
+            await showInlineAdaptiveBanner(payload);
+            setInlineBannerMounted(config.slotId, true);
+          } else {
+            await updateInlineAdaptiveBanner(payload);
+          }
+        } catch (e) {
+          console.warn(`Inline banner sync failed for ${config.slotId}`, e);
+        }
+      }
+    });
+  }
+
+  async function startInlineBanner() {
+    if (!supportsInlineAdaptiveBanner() || !showDetailPanel) {
+      return;
+    }
+
+    await tick();
+
+    if (!detailPanelEl) {
+      return;
+    }
+
+    inlineBannerScrollHandler = () => scheduleInlineBannerSync();
+    inlineBannerResizeHandler = () => scheduleInlineBannerSync();
+
+    detailPanelEl.addEventListener('scroll', inlineBannerScrollHandler, { passive: true });
+    window.addEventListener('resize', inlineBannerResizeHandler);
+    window.addEventListener('orientationchange', inlineBannerResizeHandler);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      inlineBannerResizeObserver = new ResizeObserver(() => scheduleInlineBannerSync(true));
+      inlineBannerResizeObserver.observe(detailPanelEl);
+      for (const config of inlineBannerConfigs) {
+        const element = getInlineBannerElement(config.slotId);
+        if (element) {
+          inlineBannerResizeObserver.observe(element);
+        }
+      }
+    }
+
+    scheduleInlineBannerSync(true);
+  }
+
+  async function stopInlineBanner() {
+    if (inlineBannerFrame !== null) {
+      cancelAnimationFrame(inlineBannerFrame);
+      inlineBannerFrame = null;
+    }
+
+    if (detailPanelEl && inlineBannerScrollHandler) {
+      detailPanelEl.removeEventListener('scroll', inlineBannerScrollHandler);
+    }
+
+    if (inlineBannerResizeHandler) {
+      window.removeEventListener('resize', inlineBannerResizeHandler);
+      window.removeEventListener('orientationchange', inlineBannerResizeHandler);
+    }
+
+    inlineBannerResizeObserver?.disconnect();
+    inlineBannerResizeObserver = null;
+    inlineBannerScrollHandler = null;
+    inlineBannerResizeHandler = null;
+
+    for (const config of inlineBannerConfigs) {
+      if (inlineBannerMounted[config.slotId]) {
+        await destroyInlineAdaptiveBanner(config.slotId);
+      }
+      setInlineBannerMounted(config.slotId, false);
+      setInlineBannerHeight(config.slotId, 0);
+    }
+  }
 
   // function toggleDetailPanel() {
   //   showDetailPanel = !showDetailPanel;
@@ -340,13 +584,31 @@ async function selectLocation(event) {
   //     fetchExtendedWeather();
   //   }
   // }
-  function toggleDetailPanel() {
+  async function toggleDetailPanel() {
     showDetailPanel = !showDetailPanel;
 
+    if (showDetailPanel) {
+      try {
+        await AdMob.hideBanner();
+        await AdMob.prepareInterstitial({ adId: 'ca-app-pub-3940256099942544/1033173712', isTesting: true });
+        await AdMob.showInterstitial();
+      } catch (e) {}
+
+      await startInlineBanner();
+    } else {
+      await stopInlineBanner();
+      try {
+        await AdMob.resumeBanner();
+      } catch (e) {}
+    }
   }
 
-  function closeDetailPanel() {
+  async function closeDetailPanel() {
     showDetailPanel = false;
+    await stopInlineBanner();
+    try {
+      await AdMob.resumeBanner();
+    } catch (e) {}
   }
 
   function handleKeydown(event) {
@@ -446,9 +708,9 @@ async function handleLocationClick(lng, lat, locationName) {
   };
   
   if (isMobile) {
-    flyToOptions.zoom = 12;
-    flyToOptions.center = [lng, lat + 0.03];
-    flyToOptions.padding = { top: 80, bottom: 300, left: 20, right: 20 };
+    flyToOptions.zoom = 11;
+    flyToOptions.center = [lng, lat + 0.07];
+    flyToOptions.padding = { top: 60, bottom: 160, left: 20, right: 20 };
   } else {
     flyToOptions.zoom = 12;
     flyToOptions.center = [lng, lat + 0.006];
@@ -484,19 +746,21 @@ async function handleLocationClick(lng, lat, locationName) {
     await tick(); // počkaj kým Svelte aktualizuje props v MarkerPopup
 
     if (markerPopup) {
+      markerPopup.removeMiniBar();
       markerPopup.createPopup();
     }
   } catch (error) {
     console.error('Weather fetch error:', error);
     await tick();
     if (markerPopup) {
+      markerPopup.removeMiniBar();
       markerPopup.createPopup();
     }
   }
 }
 
 async function fetchExtendedWeatherFixed(lat, lng) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation,wind_speed_10m,weathercode&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=7`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation,wind_speed_10m,wind_direction_10m,weathercode&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,uv_index_max,sunrise,sunset,wind_direction_10m_dominant&timezone=auto&forecast_days=7`;
 
   try {
     const res = await fetch(url);
@@ -520,13 +784,15 @@ async function fetchExtendedWeatherFixed(lat, lng) {
         
         return {
           time: hour + 'h',
+          tempC: data.hourly.temperature_2m[actualIndex],
           temp: Math.round(data.hourly.temperature_2m[actualIndex]),
           code: data.hourly.weathercode[actualIndex],
           originalTime: time,
           icon: getWeatherIcon(data.hourly.weathercode[actualIndex], time),
           precipitation: data.hourly.precipitation[actualIndex] || 0,
-          wind: data.hourly.wind_speed_10m[actualIndex] ? 
-                data.hourly.wind_speed_10m[actualIndex].toFixed(1) : '0.0'
+          wind: data.hourly.wind_speed_10m[actualIndex] ?
+                data.hourly.wind_speed_10m[actualIndex].toFixed(1) : '0.0',
+          windDir: data.hourly.wind_direction_10m?.[actualIndex] ?? null
         };
       });
 
@@ -693,13 +959,24 @@ async function fetchExtendedWeatherFixed(lat, lng) {
   placeholder={t('search_placeholder')}
 />
 
-<MarkerPopup 
+<MarkerPopup
     bind:this={markerPopup}
     {marker}
     {weatherData}
     locationName={searchQuery.split(',')[0]}
     {maptilersdk}
     onToggleDetailPanel={toggleDetailPanel}
+    onSavePlace={() => {
+      if (currentLat !== null && currentLng !== null) {
+        savedPlaces.add({
+          id: `${currentLat.toFixed(4)}_${currentLng.toFixed(4)}`,
+          name: selectedPlace?.name || searchQuery.split(',')[0] || 'Miesto',
+          lat: currentLat,
+          lng: currentLng,
+          isDefault: false
+        });
+      }
+    }}
 />
 
 {#if weatherData}
@@ -727,8 +1004,8 @@ async function fetchExtendedWeatherFixed(lat, lng) {
             <!-- <span>{weatherIcons[parseInt(weatherData.daily.weathercode[i])] || "❓"}</span> -->
             <span>{getWeatherIcon(weatherData.daily.weathercode[i], weatherData.daily.time[i] + 'T12:00')}</span>
             <div class="forecast-temps">
-              <span class="forecast-temp-max">{Math.round(maxTemp)}°</span>
-              <span class="forecast-temp-min">{Math.round(weatherData.daily.temperature_2m_min[i])}°</span>
+              <span class="forecast-temp-max">{convertTemp(maxTemp, unit)}{unitSymbol(unit)}</span>
+              <span class="forecast-temp-min">{convertTemp(weatherData.daily.temperature_2m_min[i], unit)}{unitSymbol(unit)}</span>
             </div>
           </div>
         {/each}
@@ -739,27 +1016,33 @@ async function fetchExtendedWeatherFixed(lat, lng) {
   <!-- 📊 DETAIL PANEL -->
   {#if showDetailPanel}
     <div class="weather-detail-overlay" on:click={closeDetailPanel} on:keydown={(e) => e.key === 'Escape' && closeDetailPanel()} role="presentation">
-      <div class="weather-detail-panel" on:click|stopPropagation on:keydown|stopPropagation role="dialog" aria-modal="true">
+      <div class="weather-detail-panel" bind:this={detailPanelEl} on:click|stopPropagation on:keydown|stopPropagation role="dialog" aria-modal="true">
         <div class="detail-header">
-          <h3>📊 {t('detail_charts')}: {searchQuery.split(',')[0]}</h3>
+          <h3>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            {searchQuery.split(',')[0]}
+          </h3>
           <button class="close-btn" on:click={closeDetailPanel}>✕</button>
         </div>
         
         <div class="detail-content">
           <!-- Additional Stats -->
-          <div class="chart-container">
+          <div class="chart-container" id="section-statistics">
             <div class="chart-header">
               <!-- <div class="hourly-section"> -->
-              <h3>📈 {t('statistics')}</h3>
+              <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+                {t('statistics')}
+              </h3>
             </div>
             <div class="stats-grid">
               <div class="stat-item">
                 <span class="stat-label">{t('max_temp_7d')}</span>
-                <span class="stat-value">{weatherData.extended ? Math.max(...weatherData.extended.daily.temperature_2m_max.slice(0, 7)) : '--'}°C</span>
+                <span class="stat-value">{weatherData.extended ? convertTemp(Math.max(...weatherData.extended.daily.temperature_2m_max.slice(0, 7)), unit) : '--'}{unitSymbol(unit)}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">{t('min_temp_7d')}</span>
-                <span class="stat-value">{weatherData.extended ? Math.min(...weatherData.extended.daily.temperature_2m_min.slice(0, 7)) : '--'}°C</span>
+                <span class="stat-value">{weatherData.extended ? convertTemp(Math.min(...weatherData.extended.daily.temperature_2m_min.slice(0, 7)), unit) : '--'}{unitSymbol(unit)}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">{t('total_precip')}</span>
@@ -772,10 +1055,26 @@ async function fetchExtendedWeatherFixed(lat, lng) {
             </div>
           </div>
 
+          <div
+            class="inline-ad-slot"
+            class:is-native={supportsInlineAdaptiveBanner()}
+            bind:this={inlineStatsBannerEl}
+            style:min-height={`${getInlineBannerHeight('detail-inline-stats')}px`}
+            aria-label="Advertisement"
+          >
+            {#if !supportsInlineAdaptiveBanner()}
+              <span class="test-ad-label">Ad</span>
+              <span class="test-ad-text">Inline adaptive banner sa zobrazí len v Android appke.</span>
+            {/if}
+          </div>
+
           <!-- HOURLY FORECAST BAR CHART -->
-          <div class="chart-container">
+          <div class="chart-container" id="section-hourly">
             <div class="chart-header">
-              <h3>🕐 {t('hourly_forecast')}</h3>
+              <h3>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                {t('hourly_forecast')}
+              </h3>
             </div>
             <div class="hourly-chart-wrapper">
               {#each hourlyData as hour}
@@ -786,46 +1085,176 @@ async function fetchExtendedWeatherFixed(lat, lng) {
                       {getWeatherIcon(hour.code, hour.originalTime)}
                     </div>
                     <div class="h-temp" style="position:absolute; bottom:{Math.min(barPct+7, 82)}%; left:50%; transform:translateX(-50%);">
-                      {hour.temp}°
+                      {convertTemp(hour.temp, unit)}{unitSymbol(unit)}
                     </div>
                     <div class="h-bar" style="position:absolute; bottom:0; height:{barPct}%; left:50%; transform:translateX(-50%); width:10px;"></div>
-                    {#if hour.precipitation > 0}
-                      <div class="h-precip" style="position:absolute; bottom:-18px; left:50%; transform:translateX(-50%);">
-                        💧{hour.precipitation}
-                      </div>
-                    {/if}
                   </div>
-                  <div class="h-time">{hour.time}</div>
-                  <div class="h-wind">💨{hour.wind}</div>
+                  <div class="h-time h-time--{getTimeOfDay(hour.time)}">{hour.time}</div>
+                  <div class="h-precip">
+                    {#if hour.precipitation > 0}
+                      💧{hour.precipitation}
+                    {:else}
+                      <span style="opacity:0.3">—</span>
+                    {/if}
+                    <span class="h-unit">mm</span>
+                  </div>
+                  <div class="h-wind"><span class="h-wind-arrow">{hour.windDir !== null ? getWindArrow(hour.windDir) : '·'}</span>{hour.wind}<span class="h-unit">m/s</span></div>
                 </div>
               {/each}
             </div>
           </div> 
 
+          <div
+            class="inline-ad-slot"
+            class:is-native={supportsInlineAdaptiveBanner()}
+            bind:this={inlineHourlyBannerEl}
+            style:min-height={`${getInlineBannerHeight('detail-inline-hourly')}px`}
+            aria-label="Advertisement"
+          >
+            {#if !supportsInlineAdaptiveBanner()}
+              <span class="test-ad-label">Ad</span>
+              <span class="test-ad-text">Banner 2 - hodinova predpoved</span>
+            {/if}
+          </div>
+
           {#if weatherData.daily}
-            <div class="chart-container mobile-show">
+            {@const f5AllMax = weatherData.daily.temperature_2m_max.slice(0, 5)}
+            {@const f5AllMin = weatherData.daily.temperature_2m_min.slice(0, 5)}
+            {@const f5ActualMin = Math.min(...f5AllMin)}
+            {@const f5ActualMax = Math.max(...f5AllMax)}
+            {@const f5Pad = (f5ActualMax - f5ActualMin) * 0.1}
+            {@const f5ScaleMin = f5ActualMin - f5Pad}
+            {@const f5ScaleMax = f5ActualMax + f5Pad}
+            {@const f5Range = (f5ScaleMax - f5ScaleMin) || 1}
+            <div class="chart-container" id="section-forecast-5day">
               <div class="chart-header">
-                <!-- <div class="forecast-section"> -->
-                <h3>{t('forecast_5day')}</h3>
+                <h3>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  {t('forecast_5day')}
+                </h3>
+                <div class="unit-label">{unitSymbol(unit)}</div>
               </div>
-              <div class="row-boxes">
-                {#each weatherData.daily.temperature_2m_max.slice(0, 5) as maxTemp, i}
-                  <div class="forecast-item">
-                    <span class="forecast-day">
-                      {i === 0 ? t('today') : i === 1 ? t('tomorrow') : new Date(weatherData.daily.time[i]).toLocaleDateString(lang, {weekday: 'short'})}
-                    </span>
-                    <!-- <span>{weatherIcons[parseInt(weatherData.daily.weathercode[i])] || "❓"}</span> -->
-                    <span>{getWeatherIcon(weatherData.daily.weathercode[i])}</span>
-                    <div class="forecast-temps">
-                      <span class="forecast-temp-max">{Math.round(maxTemp)}°</span>
-                      <span class="forecast-temp-min">{Math.round(weatherData.daily.temperature_2m_min[i])}°</span>
+              <div class="temp-chart-wrapper f5-wrapper">
+                <div class="temp-chart">
+                  {#each f5AllMax as maxTemp, i}
+                    {@const minTemp = f5AllMin[i]}
+                    {@const code = weatherData.daily.weathercode[i]}
+                    {@const dateStr = weatherData.daily.time[i]}
+                    {@const dayIcon = getWeatherIcon(code, dateStr + 'T12:00')}
+                    {@const nightIcon = getWeatherIcon(code, dateStr + 'T22:00')}
+                    {@const precip = weatherData.extended?.daily?.precipitation_sum?.[i] || 0}
+                    {@const uv = weatherData.extended?.daily?.uv_index_max?.[i]}
+                    {@const windDir = weatherData.extended?.daily?.wind_direction_10m_dominant?.[i]}
+                    {@const windSpd = weatherData.extended?.daily?.wind_speed_10m_max?.[i]}
+                    {@const sunrise = weatherData.extended?.daily?.sunrise?.[i]}
+                    {@const sunset = weatherData.extended?.daily?.sunset?.[i]}
+                    {@const maxPos = Math.max(20, Math.min(80, ((maxTemp - f5ScaleMin) / f5Range) * 60 + 20))}
+                    {@const minPos = Math.max(20, Math.min(80, ((minTemp - f5ScaleMin) / f5Range) * 60 + 20))}
+                    {@const barHeight = Math.abs(maxPos - minPos)}
+                    {@const barBottom = Math.min(maxPos, minPos)}
+                    <div class="temp-day-column">
+                      <div class="day-label">
+                        {i === 0 ? t('today').toUpperCase() : i === 1 ? t('tomorrow').toUpperCase() : new Date(dateStr).toLocaleDateString(lang, {weekday: 'short'}).toUpperCase()}
+                      </div>
+                      <!-- Väčšia animovaná denná ikonka -->
+                      <div class="f5-icon-day-wrap" style="position:absolute; bottom:{Math.min(maxPos+22,94)}%; left:50%; transform:translateX(-50%);">
+                        {dayIcon}
+                      </div>
+                      <div class="temp-max" style="position:absolute; bottom:{Math.min(maxPos+10,86)}%; left:50%; transform:translateX(-50%);">
+                        {convertTemp(maxTemp, unit)}{unitSymbol(unit)}
+                      </div>
+                      <div class="temp-bar" style="position:absolute; bottom:{barBottom}%; height:{barHeight}%; width:20px; left:50%; transform:translateX(-50%);"></div>
+                      <div class="temp-min" style="position:absolute; bottom:{Math.max(minPos-8,12)}%; left:50%; transform:translateX(-50%);">
+                        {convertTemp(minTemp, unit)}{unitSymbol(unit)}
+                      </div>
+                      <!-- Menšia nočná ikonka -->
+                      <div class="f5-icon-night-wrap" style="position:absolute; bottom:{Math.max(minPos-20,4)}%; left:50%; transform:translateX(-50%);">
+                        {nightIcon}
+                      </div>
                     </div>
-                  </div>
-                {/each}
+                  {/each}
+                </div>
+
+                <!-- Extra info riadok pod grafom -->
+                <div class="f5-extras">
+                  {#each f5AllMax as _, i}
+                    {@const precip = weatherData.extended?.daily?.precipitation_sum?.[i] || 0}
+                    {@const precipProb = weatherData.extended?.daily?.precipitation_probability_max?.[i]}
+                    {@const uv = weatherData.extended?.daily?.uv_index_max?.[i]}
+                    {@const windDir = weatherData.extended?.daily?.wind_direction_10m_dominant?.[i]}
+                    {@const windSpd = weatherData.extended?.daily?.wind_speed_10m_max?.[i]}
+                    {@const sunrise = weatherData.extended?.daily?.sunrise?.[i]}
+                    {@const sunset = weatherData.extended?.daily?.sunset?.[i]}
+                    <div class="f5-extra-col">
+                      <!-- Pravdepodobnosť zrážok -->
+                      {#if precipProb !== undefined}
+                        <div class="f5-extra-row">
+                          <span class="f5-precip-prob" style="opacity: {precipProb > 0 ? 1 : 0.35}">{precipProb}%</span>
+                        </div>
+                      {/if}
+                      <!-- Množstvo zrážok -->
+                      <div class="f5-extra-row">
+                        <span class="f5-extra-icon">💧</span>
+                        <span>{precip > 0 ? precip.toFixed(1)+'mm' : '—'}</span>
+                      </div>
+                      <!-- UV index -->
+                      {#if uv !== undefined}
+                        <div class="f5-extra-row">
+                          <span class="f5-uv-badge" style="background:{getUVColor(uv)}">UV {Math.round(uv)}</span>
+                        </div>
+                      {/if}
+                      <!-- Vietor + smer -->
+                      {#if windSpd !== undefined}
+                        <div class="f5-extra-row">
+                          <span class="f5-wind-arrow">{getWindArrow(windDir)}</span>
+                          <span>{windSpd.toFixed(0)}m/s</span>
+                        </div>
+                      {/if}
+                      <!-- Východ / západ slnka -->
+                      {#if sunrise}
+                        <div class="f5-extra-row f5-sun-row">
+                          <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                            <line x1="10" y1="1" x2="10" y2="3.5" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+                            <line x1="15.9" y1="2.8" x2="14.2" y2="4.5" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+                            <line x1="4.1" y1="2.8" x2="5.8" y2="4.5" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M3.5 11.5 A6.5 6.5 0 0 1 16.5 11.5" fill="#f59e0b"/>
+                            <line x1="1" y1="11.5" x2="19" y2="11.5" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+                            <polyline points="7,17 10,13.5 13,17" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          {formatTime(sunrise)}
+                        </div>
+                        <div class="f5-extra-row f5-sun-row">
+                          <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
+                            <line x1="10" y1="1" x2="10" y2="3.5" stroke="#fb923c" stroke-width="2" stroke-linecap="round"/>
+                            <line x1="15.9" y1="2.8" x2="14.2" y2="4.5" stroke="#fb923c" stroke-width="2" stroke-linecap="round"/>
+                            <line x1="4.1" y1="2.8" x2="5.8" y2="4.5" stroke="#fb923c" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M3.5 11.5 A6.5 6.5 0 0 1 16.5 11.5" fill="#fb923c"/>
+                            <line x1="1" y1="11.5" x2="19" y2="11.5" stroke="#fb923c" stroke-width="2" stroke-linecap="round"/>
+                            <polyline points="7,13.5 10,17 13,13.5" fill="none" stroke="#fb923c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                          {formatTime(sunset)}
+                        </div>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
               </div>
             </div>
           {/if}
           
+          <div
+            class="inline-ad-slot"
+            class:is-native={supportsInlineAdaptiveBanner()}
+            bind:this={inlineWeeklyBannerEl}
+            style:min-height={`${getInlineBannerHeight('detail-inline-weekly')}px`}
+            aria-label="Advertisement"
+          >
+            {#if !supportsInlineAdaptiveBanner()}
+              <span class="test-ad-label">Ad</span>
+              <span class="test-ad-text">Banner 3 - 7-denna predpoved</span>
+            {/if}
+          </div>
+
           <!-- WEATHER CHARTS -->
           <WeatherCharts {weatherData} />
         </div>
@@ -863,7 +1292,7 @@ async function fetchExtendedWeatherFixed(lat, lng) {
 <WeatherLegend {activeLayer} colorRamp={activeColorRamp} />
 
 <!-- ⭐ SAVED PLACES BUTTON -->
-<button class="sp-trigger-btn" on:click={() => showSavedPlaces = true} title="Uložené miesta">
+<button class="sp-trigger-btn" on:click={() => { showSavedPlaces = true; if (marker) marker.getPopup()?.remove(); }} title="Uložené miesta">
   ⭐
   {#if $savedPlaces.length > 0}
     <span class="sp-trigger-count">{$savedPlaces.length}</span>
@@ -874,7 +1303,7 @@ async function fetchExtendedWeatherFixed(lat, lng) {
 <SavedPlaces
   bind:isOpen={showSavedPlaces}
   currentPlace={weatherData ? selectedPlace : null}
-  on:select={(e) => handleLocationClick(e.detail.lng, e.detail.lat, e.detail.name)}
+  on:select={(e) => handleLocationClick(e.detail.lng ?? e.detail.lon, e.detail.lat, e.detail.name)}
 />
 
 <MobileSidePanel 
@@ -991,7 +1420,94 @@ async function fetchExtendedWeatherFixed(lat, lng) {
   }
 
   .forecast-temp-min {
-    color: var(--text-muted, #666);
+    color: #7dd3fc;
+    font-weight: 600;
+    text-shadow: 0 0 4px rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.6);
+  }
+
+  /* ===== 5-DAY FORECAST EXTRAS ===== */
+  .f5-wrapper {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+  }
+
+  @keyframes f5-float {
+    0%, 100% { transform: translateX(-50%) translateY(0px); }
+    50%       { transform: translateX(-50%) translateY(-4px); }
+  }
+
+  .f5-icon-day-wrap {
+    font-size: 1.875rem; /* 30px */
+    animation: f5-float 3s ease-in-out infinite;
+    filter: drop-shadow(0 0.25rem 0.5rem rgba(0,0,0,0.3));
+    line-height: 1;
+  }
+
+  .f5-icon-night-wrap {
+    font-size: 26px;
+    opacity: 0.75;
+    animation: f5-float 4s ease-in-out infinite 1s;
+    filter: drop-shadow(0 0.125rem 0.25rem rgba(0,0,0,0.3));
+    line-height: 1;
+  }
+
+  .f5-extras {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 3.75rem;
+    padding: 0.75rem 0 0 0;
+    border-top: 1px solid var(--border-secondary);
+    gap: 12px;
+    min-width: max-content;
+  }
+
+  .f5-extra-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3125rem;
+  }
+
+  .f5-extra-row {
+    display: flex;
+    align-items: center;
+    gap: 0.1875rem;
+    font-size: 14px;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .f5-extra-icon {
+    font-size: 14px;
+  }
+
+  .f5-precip-prob {
+    font-size: 14px;
+    font-weight: 700;
+    color: #60a5fa;
+    letter-spacing: 0.01em;
+  }
+
+  .f5-uv-badge {
+    font-size: 14px;
+    font-weight: 700;
+    color: #000;
+    padding: 0.125rem 0.4375rem;
+    border-radius: 0.375rem;
+    line-height: 1.4;
+  }
+
+  .f5-wind-arrow {
+    font-size: 1rem; /* 16px */
+    color: var(--primary-color);
+    font-weight: 700;
+  }
+
+  .f5-sun-row {
+    font-size: 14px;
+    color: var(--text-primary);
+    opacity: 0.9;
   }
 
   /* ===== DETAIL PANEL STYLES ===== */
@@ -1011,9 +1527,9 @@ async function fetchExtendedWeatherFixed(lat, lng) {
   .weather-detail-panel {
     background: var(--bg-primary, rgba(26, 35, 50, 0.95));
     border-radius: 20px;
-    width: 90vw;
+    width: 95vw;
     max-width: 1200px;
-    max-height: 90vh;
+    max-height: 98vh;
     overflow-y: auto;
     border: 1px solid var(--border-primary, rgba(0, 255, 255, 0.2));
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
@@ -1037,6 +1553,49 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     font-size: 24px;
     font-weight: 800;
     color: var(--text-primary, #ffffff);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .detail-header h3 svg {
+    flex-shrink: 0;
+    color: var(--primary-color, #00ffff);
+    width: 26px;
+    height: 26px;
+  }
+
+  .inline-ad-slot {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    border-radius: 16px;
+    margin: 16px 0;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .inline-ad-slot.is-native {
+    background: transparent;
+    border-color: transparent;
+    padding: 0;
+  }
+
+  .test-ad-label {
+    background: #000;
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-weight: 700;
+  }
+
+  .test-ad-text {
+    color: #333;
+    font-size: 13px;
   }
 
   .detail-content {
@@ -1123,12 +1682,12 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     }
 
     .time-slider-wrapper {
-      bottom: 10px;
+      bottom: 60px;
       width: 95%;
     }
 
     .detail-content {
-      padding: 16px;
+      padding: 16px 7px;
     }
   }
 
@@ -1137,7 +1696,7 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     display: flex;
     gap: 8px;
     overflow-x: auto;
-    padding: 8px 4px 28px 4px;
+    padding: 14px 4px 20px 4px;
     scrollbar-width: thin;
     scrollbar-color: var(--primary-color, #00ffff) transparent;
   }
@@ -1161,12 +1720,13 @@ async function fetchExtendedWeatherFixed(lat, lng) {
   }
 
   .h-icon {
-    font-size: 18px;
+    font-size: 26px;
     line-height: 1;
+    margin-bottom: 7px;
   }
 
   .h-temp {
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 700;
     color: var(--primary-color, #00ffff);
     white-space: nowrap;
@@ -1180,34 +1740,83 @@ async function fetchExtendedWeatherFixed(lat, lng) {
   }
 
   .h-precip {
-    font-size: 9px;
+    font-size: 14px;
     color: var(--secondary-color, #60a5fa);
     white-space: nowrap;
+    min-height: 1.2em;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
+    text-align: center;
   }
 
   .h-time {
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 700;
     color: var(--text-secondary, #8892b0);
   }
 
+  /* Ráno 05–09 */
+  .h-time--morning {
+    color: #fbbf24;
+    text-shadow: 0 0 6px rgba(251,191,36,0.4);
+  }
+
+  /* Deň 10–17 */
+  .h-time--day {
+    color: #ffffff;
+    text-shadow: 0 0 6px rgba(255,255,255,0.25);
+  }
+
+  /* Večer 18–21 */
+  .h-time--evening {
+    color: #60a5fa;
+    text-shadow: 0 0 6px rgba(96,165,250,0.4);
+  }
+
+  /* Noc 20–04 */
+  .h-time--night {
+    color: #3b82f6;
+    text-shadow: 0 0 8px rgba(59,130,246,0.5);
+  }
+
   .h-wind {
-    font-size: 9px;
-    color: var(--text-secondary, #8892b0);
+    font-size: 14px;
+    color: var(--text-primary);
     white-space: nowrap;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
+  }
+
+  .h-wind-arrow {
+    font-size: 16px;
+    color: var(--primary-color, #00ffff);
+    line-height: 1;
+  }
+
+
+  .h-unit {
+    font-size: 14px;
+    color: var(--text-primary);
+    opacity: 0.6;
+    line-height: 1;
+    margin-bottom: 7px;
   }
 
   /* ===== SAVED PLACES TRIGGER ===== */
   .sp-trigger-btn {
     position: fixed;
-    top: 20px;
+    top: 165px;
     right: 20px;
     z-index: 500;
     background: var(--bg-primary, rgba(26, 35, 50, 0.95));
     border: 1px solid var(--border-secondary, rgba(255,255,255,0.2));
     border-radius: 50%;
-    width: 44px;
-    height: 44px;
+    width: 55px;
+    height: 55px;
     font-size: 18px;
     cursor: pointer;
     display: flex;
@@ -1243,11 +1852,11 @@ async function fetchExtendedWeatherFixed(lat, lng) {
 
   @media (max-width: 1195px) {
     .sp-trigger-btn {
-      top: 12px;
+      top: 165px;
       right: 12px;
-      width: 40px;
-      height: 40px;
-      font-size: 16px;
+      width: 50px;
+      height: 50px;
+      font-size: 21px;
     }
   }
 
