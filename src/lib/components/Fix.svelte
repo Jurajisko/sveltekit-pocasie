@@ -698,6 +698,8 @@ async function selectLocation(event) {
   });
 
 async function handleLocationClick(lng, lat, locationName) {
+  currentLat = lat;
+  currentLng = lng;
   const isMobile = window.innerWidth <= 991;
   
   // Fly to location (rovnaké ako pred tým)
