@@ -427,12 +427,8 @@ body {
   align-items: center;
   margin-bottom: 0;
   padding: 24px;
-  /* background: var(--gradient-2); */
   background: rgba(255, 255, 255, 0.1);  /* Polopriehľadné pozadie */
-  backdrop-filter: blur(10px);  
-  border-bottom-left-radius: 16px;
-  border-bottom-right-radius: 16px;
-  border: 1px solid var(--border-primary);
+  backdrop-filter: blur(10px);
   overflow: hidden;
   position: sticky;
   top: 0;           /* Prilepí na vrch */
@@ -580,8 +576,54 @@ body {
   scrollbar-color: var(--primary-color) var(--bg-secondary);
 }
 @media screen and (max-width: 767px) {
+  .hourly-slider-container {
+    padding: 12px 8px;
+  }
+
   .hourly-slider {
-    padding-left: 16px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 4px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-height: 320px;
+  }
+
+  .hourly-card {
+    width: auto;
+    padding: 8px 4px;
+    gap: 4px;
+    border-radius: 10px;
+  }
+
+  .hourly-card:hover {
+    transform: none;
+  }
+
+  .hour-time {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 0;
+  }
+
+  .hour-icon {
+    font-size: 18px;
+    margin-bottom: 0;
+  }
+
+  .hour-temp {
+    font-size: 13px;
+    margin-bottom: 0;
+  }
+
+  .hour-wind {
+    font-size: 9px;
+    margin-bottom: 0;
+  }
+
+  .hour-precip {
+    font-size: 9px;
   }
 }
 
@@ -938,9 +980,23 @@ body {
   filter: drop-shadow(0 0 12px var(--primary-color));
 }
 
-/* ACTIVE STATE */
+/* ACTIVE STATE - klik */
 #buttons button:active {
   transform: translateX(4px) scale(0.98);
+}
+
+/* ACTIVE LAYER - aktuálne aktívna vrstva */
+#buttons button.active {
+  background: linear-gradient(135deg, rgba(0,255,255,0.15), rgba(0,200,255,0.08));
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  box-shadow: 0 0 14px rgba(0, 255, 255, 0.2), inset 0 0 8px rgba(0, 255, 255, 0.05);
+  transform: translateX(6px);
+}
+
+#buttons button.active::before {
+  filter: drop-shadow(0 0 10px var(--primary-color));
+  transform: translateY(-50%) scale(1.15);
 }
 
 /* GLOW EFEKT */
@@ -1121,11 +1177,6 @@ body {
   max-width: 1920px;
   margin: 0 auto;
   padding: 0 40px 80px;
-}
-@media (min-width: 768px) {
-  .detail-content {
-      width: 90%;
-  }
 }
 
 .chart-container {

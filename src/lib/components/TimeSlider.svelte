@@ -6,6 +6,7 @@
   export let dayMarkers = [];
   export let onChange = () => {};
   export let onPlayPause = () => {};
+  export let lang = 'sk';
 
   let internalValue = value;
   $: internalValue = value;
@@ -17,7 +18,7 @@
 
   function formatTooltip(ts) {
     const d = new Date(ts);
-    return d.toLocaleString('en-GB', {
+    return d.toLocaleString(lang, {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
@@ -464,19 +465,19 @@ input[type="range"]::-moz-range-track {
 }
 
 /* 🎨 THEME SPECIFIC ENHANCEMENTS */
-[data-theme="purple"] .progress::after {
+:global([data-theme="purple"]) .progress::after {
   background: linear-gradient(to bottom, rgba(168, 85, 247, 0.3), transparent);
 }
 
-[data-theme="emerald"] .progress::after {
+:global([data-theme="emerald"]) .progress::after {
   background: linear-gradient(to bottom, rgba(16, 185, 129, 0.3), transparent);
 }
 
-[data-theme="orange"] .progress::after {
+:global([data-theme="orange"]) .progress::after {
   background: linear-gradient(to bottom, rgba(249, 115, 22, 0.3), transparent);
 }
 
-[data-theme="blue"] .progress::after {
+:global([data-theme="blue"]) .progress::after {
   background: linear-gradient(to bottom, rgba(59, 130, 246, 0.3), transparent);
 }
 </style>

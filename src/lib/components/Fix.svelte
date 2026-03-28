@@ -1,17 +1,29 @@
 <!-- src/lib/components/Fix.svelte -->
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import TimeSlider from '$lib/components/TimeSlider.svelte';
   import WeatherCharts from '$lib/components/WeatherCharts.svelte';
   import MarkerPopup from '$lib/components/MarkerPopup.svelte';
   import SearchBar from '$lib/components/SearchBar.svelte';
-  import { getWeatherIcon } from '$lib/utils/weatherIcons.js';
-
-  // Mobile side panel
   import MobileSidePanel from '$lib/components/MobileSidePanel.svelte';
+  import { getWeatherIcon } from '$lib/utils/weatherIcons.js';
+  import { i18n } from '$lib/i18n/index.js';
+  import { currentLanguage } from '$lib/stores/language.js';
+  import WeatherLegend from '$lib/components/WeatherLegend.svelte';
+  import SavedPlaces from '$lib/components/SavedPlaces.svelte';
+  import { savedPlaces } from '$lib/stores/savedPlaces.js';
+  import { switchLanguage } from '$lib/stores/language.js';
+
+  $: t = $i18n;
+  $: lang = $currentLanguage;
+
+  // Preregeneruj dayMarkers pri zmene jazyka
+  $: if (lang && minTime && maxTime) {
+    dayMarkers = generateDayMarkers(minTime, maxTime);
+  }
   
   let showMobilePanel = false;
-  let currentTheme = 'cyan'; // ✅ PRIDAJ túto premennú
+  let currentTheme = 'cyan'; 
   
   // Handlers
   function handleLayerChange(layerId) {
@@ -21,7 +33,7 @@
   function handleThemeChange(themeId) {
     console.log('🎨 Main component theme change:', themeId); // DEBUG
     
-    currentTheme = themeId; // ✅ AKTUALIZUJ local state
+    currentTheme = themeId;
     
     // Apply theme
     if (themeId === 'cyan') {
@@ -41,27 +53,43 @@
     }));
   }
   
-  // ✅ PRIDAJ: Load saved theme on mount
+
+  let showLangPicker = false;
+  let showSavedPlaces = false;
+
   onMount(() => {
     if (typeof localStorage !== 'undefined') {
       const savedTheme = localStorage.getItem('weather-app-theme') || 'cyan';
       handleThemeChange(savedTheme);
+
+      const isMobile = window.innerWidth <= 991;
+      const hasLang = localStorage.getItem('preferred_language');
+      if (isMobile && !hasLang) {
+        showLangPicker = true;
+      }
     }
   });
 
+  function pickLanguage(lang) {
+    switchLanguage(lang);
+    showLangPicker = false;
+  }
+
   let mapDiv;
+  /** @type {any} */
   let map;
+  /** @type {any} */
   let maptilersdk;
   let maptilerweather;
-  let markerPopup; // 🆕 REFERENCIA NA POPUP KOMPONENTU
+  let markerPopup;
 
-  // ✅ FUNGUJÚCE ZÁKLADY Z TEST KÓDU
   let pointerLngLat = null;
-  let activeLayer = null;
+  let activeLayer = 'wind';
+  /** @type {any} */
+  let activeColorRamp = null;
   let isPlaying = false;
   let currentTime = null;
 
-  // 🆕 PRIDANÉ: Time management pre animation
   let minTime = 0;
   let maxTime = 0;
   let currentTimeForSlider = 0;
@@ -70,7 +98,7 @@
   let timeText = '';
   let playLabel = '▶️';
 
-  // ✅ FUNGUJÚCE: Weather layers config (zachováva working verziu)
+  /** @type {Record<string, any>} */
   const weatherLayers = {
     "precipitation": {
       layer: null,
@@ -104,7 +132,6 @@
     }
   };
 
-  // ✅ FUNGUJÚCE: Legend control (zachováva working verziu)
   class colorRampLegendControl {
     constructor(options) {
       this.colorStops = options.colorStops;
@@ -160,7 +187,6 @@
     }
   }
 
-  // ✅ FUNGUJÚCE: SDK loading functions
   function loadScript(src) {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
@@ -181,98 +207,11 @@
     });
   }
 
-  // 🆕 PRIDANÉ: Search functionality
   let searchQuery = '';
   let suggestions = [];
   let marker = null;
+  let selectedPlace = null;
 
-  // 🔄 UPRAVENÁ selectLocation - teraz dostáva event
-  /*
-  async function selectLocation(event) {
-    const feature = event.detail; // Z komponentu event
-    
-    // ✅ ZACHOVÁ SA CELÁ TVOJA LOGIKA
-    let lng, lat;
-    
-    if (feature.center) {
-      [lng, lat] = feature.center;
-    } else if (feature.lon && feature.lat) {
-      lng = parseFloat(feature.lon);
-      lat = parseFloat(feature.lat);
-    } else {
-      console.error('Invalid location format:', feature);
-      return;
-    }
-
-    // Fly to location
-    map.flyTo({ 
-      center: [lng, lat], 
-      zoom: 12,
-      duration: 2000,
-      essential: true
-    });
-
-    // Remove old marker
-    if (marker) {
-      if (marker.getPopup()) {
-        marker.getPopup().remove();
-      }
-      marker.remove();
-      marker = null;
-    }
-
-    // Add new marker
-    marker = new maptilersdk.Marker({
-      color: '#667eea',
-      scale: 1.2,
-      draggable: false
-    }).setLngLat([lng, lat]).addTo(map);
-
-    // 📝 UPDATE searchQuery (dôležité pre WeatherPopup!)
-    searchQuery = feature.place_name || feature.display_name || 'Vybraná lokácia';
-
-    // ✅ JEDNODUCHO VOLAJ handleLocationClick - má už všetko správne!
-    await handleLocationClick(lng, lat, locationName);
-
-    // Fetch weather data
-    await fetchWeather(lat, lng);
-
-    // Create themed popup
-    if (markerPopup) {
-        markerPopup.createPopup();
-    }
-  }
-  */
-
-  // async function selectLocation(event) {
-  //     const feature = event.detail;
-      
-  //     // Získaj súradnice
-  //     let lng, lat;
-      
-  //     if (feature.center) {
-  //         [lng, lat] = feature.center;
-  //     } else if (feature.lon && feature.lat) {
-  //         lng = parseFloat(feature.lon);
-  //         lat = parseFloat(feature.lat);
-  //     } else {
-  //         console.error('Invalid location format:', feature);
-  //         return;
-  //     }
-
-  //     const locationName = feature.place_name || feature.display_name || 'Vybraná lokácia';
-      
-  //     // ✅ TOTO JE VŠETKO ČO POTREBUJEŠ:
-  //     await handleLocationClick(lng, lat, locationName);
-
-  //     // ✅ PRIDAJ TOTO NA KONIEC:
-  //     await fetchExtendedWeather(lat, lng);
-      
-  //     // Update search query
-  //     searchQuery = locationName;
-  // }
-
-  // ✅ UPRAŤ selectLocation - jedno volanie
 async function selectLocation(event) {
   const feature = event.detail;
   
@@ -290,13 +229,13 @@ async function selectLocation(event) {
 
   const locationName = feature.place_name || feature.display_name || 'Vybraná lokácia';
   
-  // ✅ JEDNO VOLANIE - všetko sa načíta súčasne
+
   await handleLocationClick(lng, lat, locationName);
   
   searchQuery = locationName;
 }
   
-  // 🆕 PRIDANÉ: Weather data fetching
+
   let weatherData = null;
 
   async function fetchWeather(lat, lon) {
@@ -312,7 +251,7 @@ async function selectLocation(event) {
           current: {
             temp: data.current.temperature_2m,
             wind: data.current.wind_speed_10m,
-            pressure: data.current.pressure_msl, // ✅ PRIDAJ TLAK
+            pressure: data.current.pressure_msl,
             code: data.current.weathercode,
             time: data.current.time
           },
@@ -327,7 +266,6 @@ async function selectLocation(event) {
     }
   }
 
-  // 🆕 PRIDANÉ: Time and animation functions
   function generateDayMarkers(start, end) {
     const markers = [];
     const current = new Date(start);
@@ -335,7 +273,7 @@ async function selectLocation(event) {
     while (+current <= end) {
       markers.push({
         time: +current,
-        label: current.toLocaleDateString('en-US', { weekday: 'long' })
+        label: current.toLocaleDateString(lang, { weekday: 'long' })
       });
       current.setUTCDate(current.getUTCDate() + 1);
     }
@@ -347,7 +285,7 @@ async function selectLocation(event) {
     if (weatherLayer) {
       const d = weatherLayer.getAnimationTimeDate();
       if (d) {
-        timeText = d.toLocaleString('en-GB', {
+        timeText = d.toLocaleString(lang, {
           weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false
         }).replace(',', '');
       }
@@ -390,11 +328,12 @@ async function selectLocation(event) {
     }
   }
 
-  // 🆕 PRIDANÉ: Detail panel functionality
   let showDetailPanel = false;
   let hourlyData = [];
+  $: hMinTemp = hourlyData.length ? Math.min(...hourlyData.map(h => h.temp)) : 0;
+  $: hMaxTemp = hourlyData.length ? Math.max(...hourlyData.map(h => h.temp)) : 10;
+  $: hRange = (hMaxTemp - hMinTemp) || 1;
 
-  // ✅ UPRAŤ toggleDetailPanel - už nebude čakať na data
   // function toggleDetailPanel() {
   //   showDetailPanel = !showDetailPanel;
   //   if (showDetailPanel && weatherData) {
@@ -403,7 +342,7 @@ async function selectLocation(event) {
   // }
   function toggleDetailPanel() {
     showDetailPanel = !showDetailPanel;
-    // ✅ ODSTRÁŇ fetchExtendedWeather() - data už sú načítané!
+
   }
 
   function closeDetailPanel() {
@@ -416,66 +355,7 @@ async function selectLocation(event) {
     }
   }
 
-  /*
-  async function fetchExtendedWeather() {
-    if (!pointerLngLat) return;
-    
-    const lat = pointerLngLat.lat;
-    const lon = pointerLngLat.lng;
-    
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weathercode,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation,wind_speed_10m,weathercode&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=7`;
-
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      
-      if (data.hourly) {
-        const now = new Date();           // ⏰ Zisti aktuálny čas
-        const currentHour = now.getHours(); // 🕐 Napríklad: 14 (ak je 14:30)
-        
-        // 🔍 NÁJDI INDEX aktuálnej hodiny v API dátach
-        const currentTimeIndex = data.hourly.time.findIndex(time => {
-          const hour = new Date(time).getHours();
-          return hour === currentHour;    // Nájde pozíciu kde je 14h v API
-        });
-        
-        // 📍 NASTAV ROZSAH - od aktuálnej hodiny na 24h dopredu
-        const startIndex = currentTimeIndex >= 0 ? currentTimeIndex : 0;
-        const endIndex = Math.min(startIndex + 24, data.hourly.time.length);
-        
-        // 🎯 VYTVOR hourlyData OD AKTUÁLNEJ HODINY
-        hourlyData = data.hourly.time.slice(startIndex, endIndex).map((time, i) => {
-    const actualIndex = startIndex + i;
-    const hour = new Date(time).getHours();
-    
-    return {
-      time: hour + 'h',
-      temp: Math.round(data.hourly.temperature_2m[actualIndex]),
-      // ✅ PRIDAJ TIETO DVA RIADKY:
-      code: data.hourly.weathercode[actualIndex],
-      originalTime: time,
-      // ✅ SPRÁVNE VOLANIE S ČASOM:
-      icon: getWeatherIcon(data.hourly.weathercode[actualIndex], time),
-      precipitation: data.hourly.precipitation[actualIndex] || 0,
-      wind: data.hourly.wind_speed_10m[actualIndex] ? 
-            data.hourly.wind_speed_10m[actualIndex].toFixed(1) : '0.0'
-    };
-  });
-
-        weatherData.extended = {
-          hourly: data.hourly,
-          daily: data.daily
-        };
-      }
-    } catch (error) {
-      console.error('Extended weather fetch error:', error);
-    }
-  } */
-
-  // ✅ HLAVNÁ INICIALIZÁCIA (zachováva working verziu)
   onMount(async () => {
-    console.log('🧪 Loading MapTiler SDKs...');
-    
     await loadCSS('https://cdn.maptiler.com/maptiler-sdk-js/v3.2.0/maptiler-sdk.css');
     await loadScript('https://cdn.maptiler.com/maptiler-sdk-js/v3.2.0/maptiler-sdk.umd.min.js');
     await loadScript('https://cdn.maptiler.com/maptiler-weather/v3.0.1/maptiler-weather.umd.min.js');
@@ -483,7 +363,7 @@ async function selectLocation(event) {
     maptilersdk = window.maptilersdk;
     maptilerweather = window.maptilerweather;
 
-    maptilersdk.config.apiKey = 'ry26WCBx6tt715jhxPwh';
+    maptilersdk.config.apiKey = import.meta.env.VITE_MAPTILER_KEY;
 
     // Set color ramps after SDK is loaded
     weatherLayers.precipitation.colorRamp = maptilerweather.ColorRamp.builtin.PRECIPITATION;
@@ -491,6 +371,8 @@ async function selectLocation(event) {
     weatherLayers.radar.colorRamp = maptilerweather.ColorRamp.builtin.RADAR;
     weatherLayers.temperature.colorRamp = maptilerweather.ColorRamp.builtin.TEMPERATURE_3;
     weatherLayers.wind.colorRamp = maptilerweather.ColorRamp.builtin.WIND_ROCKET;
+    // Trigger reactivity pre legendu
+    activeColorRamp = weatherLayers[activeLayer]?.colorRamp;
 
     // Create map
     map = new maptilersdk.Map({
@@ -503,32 +385,31 @@ async function selectLocation(event) {
     });
 
     map.on('load', () => {
-      console.log('🗺️ Map loaded!');
-      
       map.setPaintProperty("Water", 'fill-color', "rgba(0, 0, 0, 0.4)");
-      
-      // Start with wind layer
       initWeatherMap("wind");
-      
-      // Add event handlers
+
+      // Načítaj predvolené miesto pri štarte
+      const defaultPlace = savedPlaces.getDefault();
+      if (defaultPlace) {
+        setTimeout(() => {
+          handleLocationClick(defaultPlace.lng, defaultPlace.lat, defaultPlace.name);
+        }, 800);
+      }
       map.on('mousemove', (e) => updatePointerValue(e.lngLat));
-      
-        // Click handler for location selection
+
         map.on('click', async (e) => {
             const { lng, lat } = e.lngLat;
-            
+
             try {
                 const response = await fetch(
-                    `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=ry26WCBx6tt715jhxPwh&limit=1&language=sk`
+                    `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${import.meta.env.VITE_MAPTILER_KEY}&limit=1&language=sk`
                 );
                 const data = await response.json();
-                
+
                 let locationName = 'Neznáme miesto';
                 if (data.features && data.features.length > 0) {
                     locationName = data.features[0].place_name;
                 }
-                
-                // ✅ PRIAMO VOLAJ handleLocationClick namiesto selectLocation
                 await handleLocationClick(lng, lat, locationName);
                 
             } catch (error) {
@@ -542,7 +423,7 @@ async function selectLocation(event) {
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', handleKeydown);
       
-      // 🆕 PRIDAJ THEME CHANGE LISTENER
+
       window.addEventListener('themeChanged', (e) => {
           console.log('Theme changed to:', e.detail.theme);
           
@@ -554,8 +435,6 @@ async function selectLocation(event) {
     }
   });
 
-  // 🆕 NOVÁ FUNKCIA - priamo spracuje click na mapu
-  // ✅ OPRVAENÝ handleLocationClick - načíta všetko súčasne
 async function handleLocationClick(lng, lat, locationName) {
   const isMobile = window.innerWidth <= 991;
   
@@ -595,63 +474,27 @@ async function handleLocationClick(lng, lat, locationName) {
 
   // Update search query
   searchQuery = locationName;
-  
-  // ✅ SET pointerLngLat PRED volaním API!
+  selectedPlace = { name: locationName.split(',')[0], lat, lng };
+
   pointerLngLat = { lat, lng };
 
-  // ✅ ZAVOLAJ OBE API SÚČASNE - paralelne!
   try {
-    console.log('🔄 Loading weather data...');
-    
-    // Základné + rozšírené data paralelne
-    await Promise.all([
-      fetchWeather(lat, lng),           // 5-dňová
-      fetchExtendedWeatherFixed(lat, lng) // 7-dňová + hodinová
-    ]);
-    
-    console.log('✅ All weather data loaded!');
-    
-    // ✅ DEBUG AFTER data is loaded:
-    console.log('=== WEATHER CODE DEBUG ===');
-    console.log('weatherData:', weatherData);
-    
-    if (weatherData?.daily?.weathercode) {
-      console.log('Today weather code:', weatherData.daily.weathercode[0]);
-      console.log('Icon for code:', getWeatherIcon(weatherData.daily.weathercode[0]));
-      
-      // ✅ BONUS: Debug extended data too
-      if (weatherData.extended?.daily?.weathercode) {
-        console.log('Extended weather codes:', weatherData.extended.daily.weathercode.slice(0, 7));
-        console.log('Extended vs basic match:', 
-          weatherData.daily.weathercode[0] === weatherData.extended.daily.weathercode[0]);
-      }
+    await fetchWeather(lat, lng);
+    await fetchExtendedWeatherFixed(lat, lng);
+    await tick(); // počkaj kým Svelte aktualizuje props v MarkerPopup
 
-      console.log('=== WEATHER CODES COMPARISON ===');
-      console.log('Daily codes (7-day):', weatherData.daily.weathercode);
-      console.log('Hourly codes (24h):', weatherData.extended.hourly.weathercode.slice(0, 24));
-      console.log('Today daily code:', weatherData.daily.weathercode[0]);
-      console.log('Current hour code:', weatherData.extended.hourly.weathercode[0]);
-    } else {
-      console.log('❌ weatherData.daily.weathercode not found');
-    }
-    
-    // Create popup
     if (markerPopup) {
       markerPopup.createPopup();
     }
-    
   } catch (error) {
-    console.error('❌ Weather fetch error:', error);
-    
-    // Fallback - basic data only
-    await fetchWeather(lat, lng);
+    console.error('Weather fetch error:', error);
+    await tick();
     if (markerPopup) {
       markerPopup.createPopup();
     }
   }
 }
 
-// ✅ NOVÁ fetchExtendedWeatherFixed - berie parametre priamo
 async function fetchExtendedWeatherFixed(lat, lng) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation,wind_speed_10m,weathercode&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&timezone=auto&forecast_days=7`;
 
@@ -687,24 +530,22 @@ async function fetchExtendedWeatherFixed(lat, lng) {
         };
       });
 
-      // ✅ AKTUALIZUJ weatherData.extended
       if (weatherData) {
-        weatherData.extended = {
-          hourly: data.hourly,
-          daily: data.daily
+        weatherData = {
+          ...weatherData,
+          extended: {
+            hourly: data.hourly,
+            daily: data.daily
+          }
         };
       }
-      
-      console.log('✅ Extended weather data loaded!');
     }
   } catch (error) {
     console.error('Extended weather fetch error:', error);
   }
 }
 
-  // ✅ FUNGUJÚCE: createWeatherLayer (zachováva working verziu)
   function createWeatherLayer(type) {
-    console.log('🔨 Creating weather layer:', type);
     
     let weatherLayer;
     
@@ -742,7 +583,6 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     });
 
     weatherLayer.on("sourceReady", () => {
-      console.log('✅ Source ready for:', type);
       
       minTime = +weatherLayer.getAnimationStartDate();
       maxTime = +weatherLayer.getAnimationEndDate();
@@ -761,57 +601,32 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     return weatherLayer;
   }
 
-  // ✅ FUNGUJÚCE: changeWeatherLayer (zachováva working verziu) 
   function changeWeatherLayer(type) {
-    console.log('🌪️ Changing weather layer to:', type);
-    
-    if (type !== activeLayer) {
-      if (map.getLayer(activeLayer)) {
-        const activeWeatherLayer = weatherLayers[activeLayer]?.layer;
-        if (activeWeatherLayer) {
-          currentTime = activeWeatherLayer.getAnimationTime();
-          map.setLayoutProperty(activeLayer, 'visibility', 'none');
-        }
+    // Skip only if already active AND actually added to map
+    if (type === activeLayer && map.getLayer(activeLayer)) return;
+
+    // Hide previous layer
+    if (activeLayer && activeLayer !== type && map.getLayer(activeLayer)) {
+      const activeWeatherLayer = weatherLayers[activeLayer]?.layer;
+      if (activeWeatherLayer) {
+        currentTime = activeWeatherLayer.getAnimationTime();
+        map.setLayoutProperty(activeLayer, 'visibility', 'none');
       }
-
-      activeLayer = type;
-      const weatherLayer = weatherLayers[activeLayer].layer || createWeatherLayer(activeLayer);
-      
-      if (map.getLayer(activeLayer)) {
-        map.setLayoutProperty(activeLayer, 'visibility', 'visible');
-      } else {
-        map.addLayer(weatherLayer, 'Water');
-        console.log('✅ Layer added to map:', type);
-      }
-
-      /*
-      // Legend handling
-      if (map._legendControl) {
-        map.removeControl(map._legendControl);
-        map._legendControl = null;
-      }
-
-      const legendInfo = weatherLayers[type];
-      if (legendInfo?.colorRamp && legendInfo.colorRamp.getRawColorStops) {
-        try {
-          const colorStops = legendInfo.colorRamp.getRawColorStops();
-          const legendControl = new colorRampLegendControl({
-            colorStops,
-            units: legendInfo.units
-          });
-          map.addControl(legendControl, 'bottom-right');
-          map._legendControl = legendControl;
-          console.log('✅ Legend added for:', type);
-        } catch (error) {
-          console.error('❌ Legend error:', error);
-        }
-      } */
-
-      return weatherLayer;
     }
+
+    activeLayer = type;
+    activeColorRamp = weatherLayers[activeLayer]?.colorRamp;
+    const weatherLayer = weatherLayers[activeLayer].layer || createWeatherLayer(activeLayer);
+
+    if (map.getLayer(activeLayer)) {
+      map.setLayoutProperty(activeLayer, 'visibility', 'visible');
+    } else {
+      map.addLayer(weatherLayer, 'Water');
+    }
+
+    return weatherLayer;
   }
 
-  // ✅ FUNGUJÚCE: updatePointerValue (zachováva working verziu)
   function updatePointerValue(lngLat) {
     if (!lngLat) return;
     pointerLngLat = lngLat;
@@ -834,7 +649,6 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     }
   }
 
-  // ✅ FUNGUJÚCE: initWeatherMap (zachováva working verziu)
   function initWeatherMap(type) {
     console.log('🌦️ Initializing weather map with:', type);
     changeWeatherLayer(type);
@@ -846,20 +660,39 @@ async function fetchExtendedWeatherFixed(lat, lng) {
   console.log(getWeatherIcon(61)); // Bez času - môže byť mesiacik
 </script>
 
-<!-- 🗺️ MAP CONTAINER -->
 <div bind:this={mapDiv} id="map"></div>
 
-
+<!-- 🌐 LANGUAGE PICKER - prvá návšteva mobile -->
+{#if showLangPicker}
+  <div class="lang-picker-overlay">
+    <div class="lang-picker-sheet">
+      <div class="lang-picker-title">🌍 Vyber jazyk / Choose language / Sprache wählen</div>
+      <div class="lang-picker-btns">
+        <button class="lang-pick-btn" on:click={() => pickLanguage('sk')}>
+          <span class="lang-flag">🇸🇰</span>
+          <span>Slovenčina</span>
+        </button>
+        <button class="lang-pick-btn" on:click={() => pickLanguage('en')}>
+          <span class="lang-flag">🇬🇧</span>
+          <span>English</span>
+        </button>
+        <button class="lang-pick-btn" on:click={() => pickLanguage('de')}>
+          <span class="lang-flag">🇩🇪</span>
+          <span>Deutsch</span>
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <!-- 🔍 SEARCH S BIND:VALUE -->
 <SearchBar 
   bind:value={searchQuery}
   on:locationSelected={selectLocation}
-  apiKey="ry26WCBx6tt715jhxPwh"
-  placeholder="Hľadaj miesto..."
+  apiKey={import.meta.env.VITE_MAPTILER_KEY}
+  placeholder={t('search_placeholder')}
 />
 
-<!-- 🆕 PRIDAJ WEATHER POPUP KOMPONENTU -->
 <MarkerPopup 
     bind:this={markerPopup}
     {marker}
@@ -869,13 +702,12 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     onToggleDetailPanel={toggleDetailPanel}
 />
 
-<!-- 🌤️ WEATHER DISPLAY -->
 {#if weatherData}
   <div class="weather-display">
     <div class="weather-header">
       <div class="weather-location">{searchQuery.split(',')[0]}</div>
       <div class="weather-header-right">
-        <button class="expand-btn" on:click={toggleDetailPanel} title="👆 Zobraziť detailné grafy">
+        <button class="expand-btn" on:click={toggleDetailPanel} title={t('show_detail')}>
           👆
         </button>
          <div class="weather-icon">
@@ -886,11 +718,11 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     
     {#if weatherData.daily}
       <div class="forecast-section">
-        <div class="forecast-title">5-dňová predpoveď</div>
+        <div class="forecast-title">{t('forecast_5day')}</div>
         {#each weatherData.daily.temperature_2m_max.slice(0, 5) as maxTemp, i}
           <div class="forecast-item">
             <span class="forecast-day">
-              {i === 0 ? 'Dnes' : i === 1 ? 'Zajtra' : new Date(weatherData.daily.time[i]).toLocaleDateString('sk', {weekday: 'short'})}
+              {i === 0 ? t('today') : i === 1 ? t('tomorrow') : new Date(weatherData.daily.time[i]).toLocaleDateString(lang, {weekday: 'short'})}
             </span>
             <!-- <span>{weatherIcons[parseInt(weatherData.daily.weathercode[i])] || "❓"}</span> -->
             <span>{getWeatherIcon(weatherData.daily.weathercode[i], weatherData.daily.time[i] + 'T12:00')}</span>
@@ -906,10 +738,10 @@ async function fetchExtendedWeatherFixed(lat, lng) {
 
   <!-- 📊 DETAIL PANEL -->
   {#if showDetailPanel}
-    <div class="weather-detail-overlay" on:click={closeDetailPanel}>
-      <div class="weather-detail-panel" on:click|stopPropagation>
+    <div class="weather-detail-overlay" on:click={closeDetailPanel} on:keydown={(e) => e.key === 'Escape' && closeDetailPanel()} role="presentation">
+      <div class="weather-detail-panel" on:click|stopPropagation on:keydown|stopPropagation role="dialog" aria-modal="true">
         <div class="detail-header">
-          <h3>📊 Detailné grafy a štatistiky: {searchQuery.split(',')[0]}</h3>
+          <h3>📊 {t('detail_charts')}: {searchQuery.split(',')[0]}</h3>
           <button class="close-btn" on:click={closeDetailPanel}>✕</button>
         </div>
         
@@ -918,48 +750,55 @@ async function fetchExtendedWeatherFixed(lat, lng) {
           <div class="chart-container">
             <div class="chart-header">
               <!-- <div class="hourly-section"> -->
-              <h3>📈 Štatistiky</h3>
+              <h3>📈 {t('statistics')}</h3>
             </div>
             <div class="stats-grid">
               <div class="stat-item">
-                <span class="stat-label">Max teplota (7d)</span>
+                <span class="stat-label">{t('max_temp_7d')}</span>
                 <span class="stat-value">{weatherData.extended ? Math.max(...weatherData.extended.daily.temperature_2m_max.slice(0, 7)) : '--'}°C</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">Min teplota (7d)</span>
+                <span class="stat-label">{t('min_temp_7d')}</span>
                 <span class="stat-value">{weatherData.extended ? Math.min(...weatherData.extended.daily.temperature_2m_min.slice(0, 7)) : '--'}°C</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">Celkové zrážky</span>
+                <span class="stat-label">{t('total_precip')}</span>
                 <span class="stat-value">{weatherData.extended ? weatherData.extended.daily.precipitation_sum.slice(0, 7).reduce((a,b) => a+b, 0).toFixed(1) : '--'}mm</span>
               </div>
               <div class="stat-item">
-                <span class="stat-label">Max vietor</span>
+                <span class="stat-label">{t('max_wind')}</span>
                 <span class="stat-value">{weatherData.extended ? Math.max(...weatherData.extended.daily.wind_speed_10m_max.slice(0, 7)).toFixed(1) : '--'}m/s</span>
               </div>
             </div>
           </div>
 
-          <!-- HOURLY FORECAST -->
+          <!-- HOURLY FORECAST BAR CHART -->
           <div class="chart-container">
             <div class="chart-header">
-              <!-- <div class="hourly-section"> -->
-              <h3>🕐 Hodinová predpoveď (24h)</h3>
+              <h3>🕐 {t('hourly_forecast')}</h3>
             </div>
-            <div class="hourly-slider-container">
-              <div class="hourly-slider">
-                {#each hourlyData as hour}
-                  <div class="hourly-card">
-                    <div class="hour-time">{hour.time}</div>
-                    <!-- <div class="hour-icon">{hour.icon}</div> -->
-                    <div class="hour-icon"> {getWeatherIcon(hour.code, hour.originalTime)}</div>
-                    
-                    <div class="hour-temp">{hour.temp}°</div>
-                    <div class="hour-wind">💨{hour.wind}</div>
-                    <div class="hour-precip">💧{hour.precipitation || 0}mm</div>
+            <div class="hourly-chart-wrapper">
+              {#each hourlyData as hour}
+                {@const barPct = ((hour.temp - hMinTemp) / hRange) * 55 + 15}
+                <div class="hourly-col">
+                  <div class="hourly-col-inner" style="height: 160px; position: relative;">
+                    <div class="h-icon" style="position:absolute; bottom:{Math.min(barPct+18, 90)}%; left:50%; transform:translateX(-50%);">
+                      {getWeatherIcon(hour.code, hour.originalTime)}
+                    </div>
+                    <div class="h-temp" style="position:absolute; bottom:{Math.min(barPct+7, 82)}%; left:50%; transform:translateX(-50%);">
+                      {hour.temp}°
+                    </div>
+                    <div class="h-bar" style="position:absolute; bottom:0; height:{barPct}%; left:50%; transform:translateX(-50%); width:10px;"></div>
+                    {#if hour.precipitation > 0}
+                      <div class="h-precip" style="position:absolute; bottom:-18px; left:50%; transform:translateX(-50%);">
+                        💧{hour.precipitation}
+                      </div>
+                    {/if}
                   </div>
-                {/each}
-              </div>
+                  <div class="h-time">{hour.time}</div>
+                  <div class="h-wind">💨{hour.wind}</div>
+                </div>
+              {/each}
             </div>
           </div> 
 
@@ -967,13 +806,13 @@ async function fetchExtendedWeatherFixed(lat, lng) {
             <div class="chart-container mobile-show">
               <div class="chart-header">
                 <!-- <div class="forecast-section"> -->
-                <h3>5-dňová predpoveď</h3>
+                <h3>{t('forecast_5day')}</h3>
               </div>
               <div class="row-boxes">
                 {#each weatherData.daily.temperature_2m_max.slice(0, 5) as maxTemp, i}
                   <div class="forecast-item">
                     <span class="forecast-day">
-                      {i === 0 ? 'Dnes' : i === 1 ? 'Zajtra' : new Date(weatherData.daily.time[i]).toLocaleDateString('sk', {weekday: 'short'})}
+                      {i === 0 ? t('today') : i === 1 ? t('tomorrow') : new Date(weatherData.daily.time[i]).toLocaleDateString(lang, {weekday: 'short'})}
                     </span>
                     <!-- <span>{weatherIcons[parseInt(weatherData.daily.weathercode[i])] || "❓"}</span> -->
                     <span>{getWeatherIcon(weatherData.daily.weathercode[i])}</span>
@@ -997,11 +836,11 @@ async function fetchExtendedWeatherFixed(lat, lng) {
 
 <!-- 🎛️ LAYER BUTTONS -->
 <div id="buttons">
-  <button on:click={() => changeWeatherLayer('precipitation')}>Zrážky</button>
-  <button on:click={() => changeWeatherLayer('pressure')}>Tlak</button>
-  <button on:click={() => changeWeatherLayer('radar')}>Radar</button>
-  <button on:click={() => changeWeatherLayer('temperature')}>Teplota</button>
-  <button on:click={() => changeWeatherLayer('wind')}>Vietor</button>
+  <button class:active={activeLayer === 'precipitation'} on:click={() => changeWeatherLayer('precipitation')}>{t('precipitation')}</button>
+  <button class:active={activeLayer === 'pressure'} on:click={() => changeWeatherLayer('pressure')}>{t('pressure')}</button>
+  <button class:active={activeLayer === 'radar'} on:click={() => changeWeatherLayer('radar')}>{t('radar')}</button>
+  <button class:active={activeLayer === 'temperature'} on:click={() => changeWeatherLayer('temperature')}>{t('temperature')}</button>
+  <button class:active={activeLayer === 'wind'} on:click={() => changeWeatherLayer('wind')}>{t('wind')}</button>
 </div>
 
 <!-- ⏯️ TIME SLIDER -->
@@ -1014,11 +853,29 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     dayMarkers={dayMarkers}
     onChange={updateTime}
     onPlayPause={togglePlay}
+    {lang}
   />
 </div>
 
 <!-- 📊 POINTER DATA -->
 <div id="pointer-data"></div>
+
+<WeatherLegend {activeLayer} colorRamp={activeColorRamp} />
+
+<!-- ⭐ SAVED PLACES BUTTON -->
+<button class="sp-trigger-btn" on:click={() => showSavedPlaces = true} title="Uložené miesta">
+  ⭐
+  {#if $savedPlaces.length > 0}
+    <span class="sp-trigger-count">{$savedPlaces.length}</span>
+  {/if}
+</button>
+
+<!-- ⭐ SAVED PLACES DRAWER -->
+<SavedPlaces
+  bind:isOpen={showSavedPlaces}
+  currentPlace={weatherData ? selectedPlace : null}
+  on:select={(e) => handleLocationClick(e.detail.lng, e.detail.lat, e.detail.name)}
+/>
 
 <MobileSidePanel 
   bind:isOpen={showMobilePanel}
@@ -1035,64 +892,6 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     inset: 0;
     width: 100%;
     height: 100vh;
-  }
-
-  /* ===== SEARCH STYLES ===== */
-  #maptiler-search {
-    z-index: 99;
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 400px;
-    max-width: 90vw;
-  }
-
-  #maptiler-search > div {
-    position: relative;
-  }
-
-  #maptiler-search > div::before {
-    content: "🔍";
-    position: absolute;
-    left: 18px;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 1;
-    font-size: 16px;
-    pointer-events: none;
-  }
-
-  .autocomplete-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    border-radius: 0 0 16px 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    max-height: 300px;
-    overflow-y: auto;
-    border-top: 1px solid rgba(0, 0, 0, 0.1);
-    margin-top: 2px;
-  }
-
-  .autocomplete-list li {
-    padding: 12px 20px;
-    color: #333;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-size: 14px;
-  }
-
-  .autocomplete-list li:hover {
-    background: rgba(102, 126, 234, 0.1);
-  }
-
-  .autocomplete-list li:last-child {
-    border-bottom: none;
   }
 
   /* ===== WEATHER DISPLAY STYLES ===== */
@@ -1139,50 +938,8 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     animation: iconFloat 3s ease-in-out infinite;
   }
 
-  .weather-temp {
-    font-size: 48px;
-    font-weight: 800;
-    line-height: 1;
-    background: var(--gradient-1, linear-gradient(135deg, #00ffff 0%, #00c8ff 50%, #00ff96 100%));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 8px;
-  }
 
-  .weather-description {
-    color: var(--text-secondary, #8892b0);
-    font-size: 14px;
-    margin-bottom: 20px;
-  }
 
-  .weather-details {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    margin-bottom: 20px;
-  }
-
-  .weather-detail {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px;
-    background: var(--bg-glass, rgba(255, 255, 255, 0.1));
-    border-radius: 12px;
-    border: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.2));
-    transition: all 0.3s ease;
-  }
-
-  .weather-detail:hover {
-    border-color: var(--primary-color, #00ffff);
-  }
-
-  .weather-detail-icon {
-    font-size: 16px;
-  }
-
- 
 
   /* ===== FORECAST STYLES ===== */
   .forecast-section {
@@ -1282,58 +1039,13 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     color: var(--text-primary, #ffffff);
   }
 
-
-
   .detail-content {
     padding: 24px;
   }
 
-
-
   /* ===== CONTROL BUTTONS ===== */
 
-
   /* ===== TIME CONTROLS ===== */
-  .timebar {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 99;
-    background: var(--bg-glass, rgba(255, 255, 255, 0.1));
-    backdrop-filter: blur(20px);
-    padding: 12px 16px;
-    border-radius: 12px;
-    border: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.2));
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: var(--text-primary, #ffffff);
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  }
-
-  .time-label {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-secondary, #8892b0);
-  }
-
-  .timebar button {
-    background: var(--primary-color, #00ffff);
-    border: none;
-    color: #000;
-    padding: 8px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 700;
-    transition: all 0.3s ease;
-  }
-
-  .timebar button:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(0, 255, 255, 0.3);
-  }
-
   .time-slider-wrapper {
     position: absolute;
     bottom: 20px;
@@ -1394,6 +1106,7 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     line-height: 1.4em;
   }
 
+
   /* ===== RESPONSIVE ===== */
   @media (max-width: 1195px) {
     .weather-display {
@@ -1405,14 +1118,8 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     }
 
     #buttons {
-      top: 10px;
+      bottom: 120px;
       left: 10px;
-    }
-
-    .timebar {
-      top: 10px;
-      right: 10px;
-      padding: 8px 12px;
     }
 
     .time-slider-wrapper {
@@ -1423,10 +1130,190 @@ async function fetchExtendedWeatherFixed(lat, lng) {
     .detail-content {
       padding: 16px;
     }
+  }
 
-    .hourly-card {
-      width: 70px;
-      padding: 12px 8px;
+  /* ===== HOURLY BAR CHART ===== */
+  .hourly-chart-wrapper {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 8px 4px 28px 4px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color, #00ffff) transparent;
+  }
+
+  .hourly-chart-wrapper::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .hourly-chart-wrapper::-webkit-scrollbar-thumb {
+    background: var(--primary-color, #00ffff);
+    border-radius: 2px;
+  }
+
+  .hourly-col {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 44px;
+  }
+
+  .h-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .h-temp {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--primary-color, #00ffff);
+    white-space: nowrap;
+  }
+
+  .h-bar {
+    background: var(--gradient-1, linear-gradient(to top, #00ffff, #00ff96));
+    border-radius: 5px;
+    min-height: 4px;
+    box-shadow: 0 0 6px var(--primary-color, #00ffff);
+  }
+
+  .h-precip {
+    font-size: 9px;
+    color: var(--secondary-color, #60a5fa);
+    white-space: nowrap;
+  }
+
+  .h-time {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary, #8892b0);
+  }
+
+  .h-wind {
+    font-size: 9px;
+    color: var(--text-secondary, #8892b0);
+    white-space: nowrap;
+  }
+
+  /* ===== SAVED PLACES TRIGGER ===== */
+  .sp-trigger-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 500;
+    background: var(--bg-primary, rgba(26, 35, 50, 0.95));
+    border: 1px solid var(--border-secondary, rgba(255,255,255,0.2));
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    transition: all 0.2s ease;
+    position: fixed;
+  }
+
+  .sp-trigger-btn:hover {
+    border-color: var(--primary-color, #00ffff);
+    transform: scale(1.05);
+    box-shadow: 0 0 16px rgba(0,255,255,0.3);
+  }
+
+  .sp-trigger-count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--primary-color, #00ffff);
+    color: #000;
+    font-size: 10px;
+    font-weight: 800;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  @media (max-width: 1195px) {
+    .sp-trigger-btn {
+      top: 12px;
+      right: 12px;
+      width: 40px;
+      height: 40px;
+      font-size: 16px;
     }
+  }
+
+  /* ===== LANGUAGE PICKER ===== */
+  .lang-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .lang-picker-sheet {
+    width: 100%;
+    background: var(--bg-primary, rgba(26, 35, 50, 0.98));
+    border-top: 1px solid var(--border-primary, rgba(0, 255, 255, 0.3));
+    border-radius: 24px 24px 0 0;
+    padding: 28px 24px 40px;
+    backdrop-filter: blur(30px);
+    animation: slideUp 0.3s ease-out;
+    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .lang-picker-title {
+    font-size: 14px;
+    color: var(--text-secondary, #8892b0);
+    text-align: center;
+    margin-bottom: 24px;
+    font-weight: 500;
+  }
+
+  .lang-picker-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .lang-pick-btn {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    background: var(--bg-glass, rgba(255, 255, 255, 0.05));
+    border: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.15));
+    border-radius: 16px;
+    color: var(--text-primary, #ffffff);
+    font-size: 17px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+  }
+
+  .lang-pick-btn:active {
+    background: var(--gradient-1, linear-gradient(135deg, rgba(0,255,255,0.2), rgba(0,200,255,0.1)));
+    border-color: var(--primary-color, #00ffff);
+    transform: scale(0.98);
+  }
+
+  .lang-flag {
+    font-size: 28px;
   }
 </style>

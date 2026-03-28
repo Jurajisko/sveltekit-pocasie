@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -f src/lib/components/MapTilersFull.svelte src/lib/components/MapTilersNoCDN.svelte src/lib/components/MapTilersRadar.svelte src/lib/components/MapTilersSearch.svelte src/lib/components/WeatherCard.svelte src/lib/components/WeatherForecast.svelte src/lib/components/WindyLayer.svelte src/lib/components/TestLayers.svelte src/lib/Counter.svelte src/lib/form.js src/lib/vitals.js)",
+      "Bash(rm -rf src/lib/header)"
+    ]
+  }
+}

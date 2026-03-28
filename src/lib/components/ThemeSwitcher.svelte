@@ -1,6 +1,13 @@
 <!-- src/lib/components/ThemeSwitcher.svelte -->
 <script>
   import { onMount } from 'svelte';
+  import { currentLanguage, switchLanguage } from '$lib/stores/language.js';
+
+  const languages = [
+    { id: 'sk', flag: '🇸🇰' },
+    { id: 'en', flag: '🇬🇧' },
+    { id: 'de', flag: '🇩🇪' }
+  ];
   
   let currentTheme = 'cyan';
   let isBrowser = false;
@@ -51,7 +58,7 @@
 
 <div class="theme-switcher">
   <div class="theme-label">🎨</div>
-  
+
   {#each themes as theme}
     <button
       class="theme-btn"
@@ -61,6 +68,19 @@
       on:click={() => switchTheme(theme.id)}
     >
       <span class="theme-emoji">{theme.emoji}</span>
+    </button>
+  {/each}
+
+  <div class="separator"></div>
+
+  {#each languages as lng}
+    <button
+      class="lang-btn"
+      class:active={$currentLanguage === lng.id}
+      title={lng.id.toUpperCase()}
+      on:click={() => switchLanguage(lng.id)}
+    >
+      {lng.flag}
     </button>
   {/each}
 </div>
@@ -143,6 +163,38 @@
     filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.5));
   }
   
+  .separator {
+    width: 1px;
+    height: 24px;
+    background: var(--border-secondary, rgba(255,255,255,0.2));
+    margin: 0 4px;
+  }
+
+  .lang-btn {
+    width: 36px;
+    height: 36px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    background: var(--bg-glass, rgba(255,255,255,0.05));
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+  }
+
+  .lang-btn:hover {
+    transform: scale(1.1);
+    background: var(--bg-glass-hover, rgba(255,255,255,0.1));
+  }
+
+  .lang-btn.active {
+    border-color: rgba(255, 255, 255, 0.8);
+    transform: scale(1.15);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+  }
+
   /* Responsive */
   @media (max-width: 1195px) {
     .theme-switcher {

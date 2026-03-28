@@ -467,13 +467,6 @@
                       margin: 0 !important;
                   }
               }
-
-              /* 🖥️ SKRYŤ DETAIL BUTTON NA DESKTOP */
-              @media (min-width: 1195px) {
-                  #popup-detail-btn {
-                      display: none !important;
-                  }
-              }
               
               .maplibregl-popup,
               .weather-popup-themed {

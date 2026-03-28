@@ -1,6 +1,11 @@
 <!-- src/lib/components/WeatherCharts.svelte -->
 <script>
   import { getWeatherIcon } from '$lib/utils/weatherIcons.js';
+  import { i18n } from '$lib/i18n/index.js';
+  import { currentLanguage } from '$lib/stores/language.js';
+
+  $: t = $i18n;
+  $: lang = $currentLanguage;
 
   export let weatherData = null;
   
@@ -41,7 +46,7 @@
   // Extract data from weatherData with temperature conversion
   $: temperatureData = weatherData?.extended?.daily ? 
     weatherData.extended.daily.time.slice(0, 7).map((time, i) => ({
-      day: new Date(time).toLocaleDateString('sk', {weekday: 'short'}),
+      day: new Date(time).toLocaleDateString(lang, {weekday: 'short'}),
       max: convertTemp(weatherData.extended.daily.temperature_2m_max[i]),
       min: convertTemp(weatherData.extended.daily.temperature_2m_min[i]),
        time: time  // ✅ PRIDAJ TOTO!
@@ -54,7 +59,7 @@
       const chance = precipitation > 0 ? Math.min(Math.round(precipitation * 15 + 10), 100) : 0;
       
       return {
-        day: new Date(time).toLocaleDateString('sk', {weekday: 'short'}),
+        day: new Date(time).toLocaleDateString(lang, {weekday: 'short'}),
         value: precipitation,
         chance: chance
       };
@@ -62,7 +67,7 @@
     
   $: windData = weatherData?.extended?.daily ? 
     weatherData.extended.daily.time.slice(0, 7).map((time, i) => ({
-      day: new Date(time).toLocaleDateString('sk', {weekday: 'short'}),
+      day: new Date(time).toLocaleDateString(lang, {weekday: 'short'}),
       value: weatherData.extended.daily.wind_speed_10m_max[i] || 0
     })) : [];
   
@@ -129,14 +134,14 @@
 {#if !weatherData?.extended}
   <div class="loading-state">
     <div class="loading-spinner"></div>
-    <p>Načítavam počasie...</p>
+    <p>{t('loading')}...</p>
   </div>
 {:else}
 
 <!-- 🌡️ TEMPERATURE CHART - Consistent with weather-display -->
 <div class="chart-container">
   <div class="chart-header">
-    <h3>7-dňová predpoveď</h3>
+    <h3>{t('forecast_7day')}</h3>
     <div class="temp-switch">
       <button 
         class:active={temperatureUnit === 'celsius'}
@@ -228,7 +233,7 @@
 <!-- 🌧️ PRECIPITATION CHART - Consistent styling -->
 <div class="chart-container">
   <div class="chart-header">
-    <h3>Zrážky tento týždeň</h3>
+    <h3>{t('precipitation')}</h3>
     <div class="unit-label">mm</div>
   </div>
   
@@ -259,7 +264,7 @@
 <!-- 💨 WIND CHART - Consistent styling -->
 <div class="chart-container">
   <div class="chart-header">
-    <h3>Vietor</h3>
+    <h3>{t('wind')}</h3>
     <div class="unit-label">m/s</div>
   </div>
   

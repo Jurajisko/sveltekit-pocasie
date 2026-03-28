@@ -191,7 +191,7 @@ onMount(async () => {
     maptilerweather = window.maptilerweather;
 
     // Nastav API kľúč
-    maptilersdk.config.apiKey = 'ry26WCBx6tt715jhxPwh';
+    maptilersdk.config.apiKey = import.meta.env.VITE_MAPTILER_KEY;
 
     // Inicializuj mapu
     map = new maptilersdk.Map({
@@ -483,7 +483,7 @@ function selectPlace(place) {
 
 
 
-.maptiler-control.legend {
+:global(.maptiler-control.legend) {
   background: white;
   padding: 8px;
   border-radius: 6px;
@@ -494,7 +494,7 @@ function selectPlace(place) {
   line-height: 1.4em;
 }
 
-.legend-gradient {
+:global(.legend-gradient) {
   border-radius: 4px;
 }
 
