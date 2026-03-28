@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { i18n } from '$lib/i18n/index.js';
   import { currentLanguage, switchLanguage } from '$lib/stores/language.js';
+  import { temperatureUnit, setTemperatureUnit } from '$lib/stores/temperatureUnit.js';
 
   $: t = $i18n;
 
@@ -110,7 +111,7 @@
   <div class="side-panel">
     <!-- HEADER WITH LOGO + CLOSE BUTTON -->
     <div class="panel-header">
-      <svg class="panel-logo" width="130" height="40" viewBox="0 0 180 56" xmlns="http://www.w3.org/2000/svg">
+      <svg class="panel-logo" width="180" height="56" viewBox="0 0 180 56" xmlns="http://www.w3.org/2000/svg">
         <style>
           /* ── Striedanie skupín: 9s cyklus ─────────────────
              0–3s   D1 viditeľné
@@ -190,8 +191,8 @@
 
         <!-- ── Vždy viditeľné ────────────────────────────── -->
         <circle class="mz-dot" cx="22" cy="46" r="3.5" fill="var(--primary-color)"/>
-        <text x="62" y="26" font-family="Segoe UI,system-ui" font-weight="700" font-size="20" fill="var(--text-primary, #fff)" letter-spacing="0.5">Meteo</text>
-        <text x="62" y="49" font-family="Segoe UI,system-ui" font-weight="700" font-size="20" fill="var(--primary-color)" letter-spacing="0.5">Zoomy</text>
+        <text x="62" y="26" font-family="Segoe UI,system-ui" font-weight="700" font-size="28" fill="var(--text-primary, #fff)" letter-spacing="0.5">Meteo</text>
+        <text x="62" y="49" font-family="Segoe UI,system-ui" font-weight="700" font-size="28" fill="var(--primary-color)" letter-spacing="0.5">Zoomy</text>
       </svg>
       <button class="panel-close" on:click={closePanel}>✕</button>
     </div>
@@ -254,6 +255,26 @@
             <span>{t('lang_' + lng.id)}</span>
           </button>
         {/each}
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="panel-section">
+      <h3>⚙️ {t('settings')}</h3>
+      <div class="setting-row">
+        <span class="setting-label">🌡️ {t('temperature_unit')}</span>
+        <div class="unit-toggle">
+          <button
+            class="unit-btn"
+            class:active={$temperatureUnit === 'celsius'}
+            on:click={() => setTemperatureUnit('celsius')}
+          >°C</button>
+          <button
+            class="unit-btn"
+            class:active={$temperatureUnit === 'fahrenheit'}
+            on:click={() => setTemperatureUnit('fahrenheit')}
+          >°F</button>
+        </div>
       </div>
     </div>
   </div>
@@ -371,7 +392,7 @@
     box-shadow: var(--shadow-hover);
     z-index: 999;
     overflow-y: auto;
-    padding: 30px 0 20px 0;
+    padding: 0 0 80px 0;
     /* ✅ CSS ANIMATION namiesto Svelte transition */
     animation: slideInLeft 0.3s ease-out;
   }
@@ -386,13 +407,22 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 16px 8px;
+    position: sticky;
+    top: 0;
+    z-index: 12;
+    padding: 20px 16px 12px;
+    background: color-mix(in srgb, var(--bg-primary) 88%, transparent);
+    backdrop-filter: blur(18px);
     border-bottom: 1px solid var(--border-secondary, rgba(255,255,255,0.08));
     margin-bottom: 8px;
   }
 
   .panel-logo {
     display: block;
+    width: min(180px, calc(100% - 52px));
+    height: auto;
+    flex: 0 1 auto;
+    margin: 0 auto;
   }
 
   .panel-close {
@@ -523,6 +553,48 @@
     font-size: 16px;
     color: var(--primary-color);
     font-weight: bold;
+  }
+
+  /* SETTINGS */
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+  }
+
+  .setting-label {
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .unit-toggle {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border-secondary);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .unit-btn {
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .unit-btn:first-child {
+    border-right: 1px solid var(--border-secondary);
+  }
+
+  .unit-btn.active {
+    background: var(--primary-color);
+    color: var(--bg-primary);
   }
 
   /* MOBILE RESPONSIVE */

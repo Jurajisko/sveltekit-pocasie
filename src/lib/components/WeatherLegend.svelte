@@ -105,7 +105,7 @@
 
   @media (max-width: 768px) {
     .legend {
-      bottom: 140px;
+      bottom: 195px;
       right: 10px;
     }
   }

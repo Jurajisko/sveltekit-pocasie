@@ -1,6 +1,15 @@
 <script>
 	import '../app.css';
 	import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
+	import { onMount } from 'svelte';
+
+	onMount(() => {
+		const script = document.createElement('script');
+		script.async = true;
+		script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-app-pub-3940256099942544';
+		script.crossOrigin = 'anonymous';
+		document.head.appendChild(script);
+	});
 </script>
 
 <ThemeSwitcher />
