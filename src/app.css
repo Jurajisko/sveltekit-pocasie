@@ -1916,6 +1916,12 @@ body {
     bottom: 0;
     transition: all 0.3s ease;
   }
+
+  .precip-bar.snow-bar {
+    background: linear-gradient(180deg, #e0f2fe, #bae6fd);
+    border-color: #7dd3fc;
+    box-shadow: 0 2px 8px rgba(125, 211, 252, 0.4);
+  }
   
   .precip-bar:hover {
     transform: scaleX(1.2);
@@ -2144,7 +2150,7 @@ body {
     .wind-chart {
       overflow-x: auto;
       scrollbar-width: none;
-      justify-content: flex-start;
+      justify-content: space-evenly;
     }
     .precip-chart::-webkit-scrollbar,
     .wind-chart::-webkit-scrollbar {

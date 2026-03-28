@@ -760,7 +760,7 @@ async function handleLocationClick(lng, lat, locationName) {
 }
 
 async function fetchExtendedWeatherFixed(lat, lng) {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation,wind_speed_10m,wind_direction_10m,weathercode&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,uv_index_max,sunrise,sunset,wind_direction_10m_dominant&timezone=auto&forecast_days=7`;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weathercode,wind_speed_10m,relative_humidity_2m&hourly=temperature_2m,precipitation,snowfall,wind_speed_10m,wind_direction_10m,weathercode&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,snowfall_sum,precipitation_probability_max,wind_speed_10m_max,uv_index_max,sunrise,sunset,wind_direction_10m_dominant&timezone=auto&forecast_days=7`;
 
   try {
     const res = await fetch(url);
@@ -790,6 +790,7 @@ async function fetchExtendedWeatherFixed(lat, lng) {
           originalTime: time,
           icon: getWeatherIcon(data.hourly.weathercode[actualIndex], time),
           precipitation: data.hourly.precipitation[actualIndex] || 0,
+          snowfall: data.hourly.snowfall?.[actualIndex] || 0,
           wind: data.hourly.wind_speed_10m[actualIndex] ?
                 data.hourly.wind_speed_10m[actualIndex].toFixed(1) : '0.0',
           windDir: data.hourly.wind_direction_10m?.[actualIndex] ?? null
@@ -1091,12 +1092,13 @@ async function fetchExtendedWeatherFixed(lat, lng) {
                   </div>
                   <div class="h-time h-time--{getTimeOfDay(hour.time)}">{hour.time}</div>
                   <div class="h-precip">
-                    {#if hour.precipitation > 0}
-                      💧{hour.precipitation}
+                    {#if hour.snowfall > 0}
+                      ❄️{hour.snowfall.toFixed(1)}<span class="h-unit">cm</span>
+                    {:else if hour.precipitation > 0}
+                      💧{hour.precipitation}<span class="h-unit">mm</span>
                     {:else}
-                      <span style="opacity:0.3">—</span>
+                      <span style="opacity:0.3">—</span><span class="h-unit">mm</span>
                     {/if}
-                    <span class="h-unit">mm</span>
                   </div>
                   <div class="h-wind"><span class="h-wind-arrow">{hour.windDir !== null ? getWindArrow(hour.windDir) : '·'}</span>{hour.wind}<span class="h-unit">m/s</span></div>
                 </div>
@@ -1179,6 +1181,7 @@ async function fetchExtendedWeatherFixed(lat, lng) {
                 <div class="f5-extras">
                   {#each f5AllMax as _, i}
                     {@const precip = weatherData.extended?.daily?.precipitation_sum?.[i] || 0}
+                    {@const snow = weatherData.extended?.daily?.snowfall_sum?.[i] || 0}
                     {@const precipProb = weatherData.extended?.daily?.precipitation_probability_max?.[i]}
                     {@const uv = weatherData.extended?.daily?.uv_index_max?.[i]}
                     {@const windDir = weatherData.extended?.daily?.wind_direction_10m_dominant?.[i]}
@@ -1192,10 +1195,15 @@ async function fetchExtendedWeatherFixed(lat, lng) {
                           <span class="f5-precip-prob" style="opacity: {precipProb > 0 ? 1 : 0.35}">{precipProb}%</span>
                         </div>
                       {/if}
-                      <!-- Množstvo zrážok -->
+                      <!-- Sneh alebo dážď -->
                       <div class="f5-extra-row">
-                        <span class="f5-extra-icon">💧</span>
-                        <span>{precip > 0 ? precip.toFixed(1)+'mm' : '—'}</span>
+                        {#if snow > 0}
+                          <span class="f5-extra-icon">❄️</span>
+                          <span>{snow.toFixed(1)}cm</span>
+                        {:else}
+                          <span class="f5-extra-icon">💧</span>
+                          <span>{precip > 0 ? precip.toFixed(1)+'mm' : '—'}</span>
+                        {/if}
                       </div>
                       <!-- UV index -->
                       {#if uv !== undefined}
@@ -1685,6 +1693,12 @@ async function fetchExtendedWeatherFixed(lat, lng) {
       bottom: 60px;
       width: 95%;
     }
+
+  @media (orientation: landscape) and (max-width: 991px) {
+    .time-slider-wrapper {
+      padding: 0;
+    }
+  }
 
     .detail-content {
       padding: 16px 7px;

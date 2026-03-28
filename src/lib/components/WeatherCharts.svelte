@@ -27,12 +27,13 @@
   $: precipitationData = weatherData?.extended?.daily ? 
     weatherData.extended.daily.time.slice(0, 7).map((time, i) => {
       const precipitation = weatherData.extended.daily.precipitation_sum[i] || 0;
-      // Calculate chance based on precipitation amount (stable calculation)
+      const snowfall = weatherData.extended.daily.snowfall_sum?.[i] || 0;
       const chance = precipitation > 0 ? Math.min(Math.round(precipitation * 15 + 10), 100) : 0;
-      
+
       return {
         day: new Date(time).toLocaleDateString(lang, {weekday: 'short'}),
         value: precipitation,
+        snowfall: snowfall,
         chance: chance
       };
     }) : [];
@@ -208,16 +209,21 @@
       
       <div class="precip-column">
         <div class="precip-value">
-          {data.value > 0 ? data.value.toFixed(1) : '0'}
+          {#if data.snowfall > 0}
+            ❄️ {data.snowfall.toFixed(1)}<span style="font-size:10px">cm</span>
+          {:else}
+            {data.value > 0 ? data.value.toFixed(1) : '0'}<span style="font-size:10px">mm</span>
+          {/if}
         </div>
-        
+
         <div class="precip-bar-container">
-          <div 
+          <div
             class="precip-bar"
+            class:snow-bar={data.snowfall > 0}
             style="height: {Math.max(percentage, 3)}%"
           ></div>
         </div>
-        
+
         <div class="precip-day">
           {data.day.toUpperCase()}
         </div>

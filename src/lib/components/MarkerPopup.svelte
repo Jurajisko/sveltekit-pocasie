@@ -69,9 +69,9 @@
           .mz-popup { padding: 12px 16px !important; }
           .mz-row1 { display: flex !important; align-items: center; gap: 10px; margin-bottom: 10px !important; }
           .mz-logo { margin-bottom: 0 !important; flex-shrink: 0; }
-          .mz-logo svg { width: 100px !important; height: 32px !important; }
+          .mz-logo svg { width: 145px !important; height: 45px !important; }
           .mz-header { margin-bottom: 0 !important; padding-right: 0 !important; flex: 1; min-width: 0; }
-          .mz-header-name { font-size: 15px !important; }
+          .mz-header-name { padding-bottom: 7px; }
           .mz-buttons { position: static !important; flex-shrink: 0; }
           .mz-btn-detail { width: 36px !important; height: 36px !important; font-size: 18px !important; }
           .mz-btn-save { width: 30px !important; height: 30px !important; font-size: 14px !important; }
