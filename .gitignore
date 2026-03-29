@@ -32,3 +32,11 @@ key-store
 **/*__BAK__*
 **/*__DEF__*
 
+# Local dev artifacts
+package-lock.json
+vite.config.js.timestamp-*.mjs
+design-preview.html
+
+# Claude internal
+.claude/
+
