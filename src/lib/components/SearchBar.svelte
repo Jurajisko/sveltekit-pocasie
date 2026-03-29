@@ -116,9 +116,9 @@
     right: 12px;
     top: 50%;
     transform: translateY(-50%);
-    background: var(--bg-glass, rgba(255, 255, 255, 0.1));
-    border: 1px solid var(--border-secondary, rgba(255, 255, 255, 0.2));
-    color: var(--text-secondary, #8892b0);
+    background: var(--primary-color);
+    border: 1px solid var(--secondary-color);
+    color: var(--bg-secondary);
     border-radius: 50%;
     width: 24px;
     height: 24px;

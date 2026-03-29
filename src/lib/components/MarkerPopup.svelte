@@ -1,6 +1,6 @@
 <!-- src/lib/components/MarkerPopup.svelte -->
 <script>
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import { getWeatherIcon } from '$lib/utils/weatherIcons.js';
   import { i18n } from '$lib/i18n/index.js';
   import { currentLanguage } from '$lib/stores/language.js';
@@ -13,11 +13,11 @@
 
   // Pri zmene jazyka alebo jednotky teploty regeneruj popup
   $: if ($currentLanguage) {
-    updateTheme();
+    tick().then(() => updateTheme());
   }
   $: if ($temperatureUnit) {
     currentUnit = $temperatureUnit;
-    updateTheme();
+    tick().then(() => updateTheme());
   }
   
   // Props
@@ -25,6 +25,8 @@
   export let weatherData = null;
   export let locationName = '';
   export let maptilersdk = null;
+
+  export let onReopen = () => {};
 
   // Extend BTN
   export let onToggleDetailPanel = () => {};
@@ -98,38 +100,74 @@
           <div class="mz-logo" style="display: flex; justify-content: center; margin-bottom: 20px;">
             <svg width="160" height="50" viewBox="0 0 180 56" xmlns="http://www.w3.org/2000/svg">
               <style>
-                @keyframes mz-show-d1 { 0%{opacity:1}33%{opacity:1}44%{opacity:0}78%{opacity:0}89%{opacity:1}100%{opacity:1} }
-                @keyframes mz-show-combo { 0%{opacity:0}33%{opacity:0}44%{opacity:1}78%{opacity:1}89%{opacity:0}100%{opacity:0} }
-                @keyframes mz-ping-out { 0%{opacity:0}10%{opacity:1}60%{opacity:.25}100%{opacity:0} }
-                @keyframes mz-dot-beat { 0%,100%{opacity:1}40%{opacity:.4} }
-                @keyframes mz-wind-draw { 0%{stroke-dashoffset:65;opacity:0}15%{opacity:.9}70%{stroke-dashoffset:0;opacity:.9}90%{opacity:0}100%{stroke-dashoffset:0;opacity:0} }
-                .mz-d1{animation:mz-show-d1 9s ease-in-out infinite}
-                .mz-combo{animation:mz-show-combo 9s ease-in-out infinite}
-                .mz-arc-ping1{animation:mz-ping-out 2.4s ease-out infinite .4s}
-                .mz-arc-ping2{animation:mz-ping-out 2.4s ease-out infinite .2s}
-                .mz-arc-ping3{animation:mz-ping-out 2.4s ease-out infinite 0s}
-                .mz-dot{animation:mz-dot-beat 2.4s ease-in-out infinite}
-                .mz-w1{stroke-dasharray:65;animation:mz-wind-draw 2.4s ease-in-out infinite 0s}
-                .mz-w2{stroke-dasharray:60;animation:mz-wind-draw 2.4s ease-in-out infinite .28s}
+                @keyframes mz-show-d1    { 0%{opacity:1} 23%{opacity:1} 26%{opacity:0} 97%{opacity:0} 100%{opacity:1} }
+                @keyframes mz-show-sun   { 0%{opacity:0} 23%{opacity:0} 26%{opacity:1} 48%{opacity:1} 51%{opacity:0} 100%{opacity:0} }
+                @keyframes mz-show-combo { 0%{opacity:0} 48%{opacity:0} 51%{opacity:1} 73%{opacity:1} 76%{opacity:0} 100%{opacity:0} }
+                @keyframes mz-show-rain  { 0%{opacity:0} 73%{opacity:0} 76%{opacity:1} 97%{opacity:1} 100%{opacity:0} }
+                @keyframes mz-ping-out   { 0%{opacity:0}10%{opacity:1}60%{opacity:.25}100%{opacity:0} }
+                @keyframes mz-dot-beat   { 0%,100%{opacity:1}40%{opacity:.4} }
+                @keyframes mz-wind-draw  { 0%{stroke-dashoffset:65;opacity:0}15%{opacity:.9}70%{stroke-dashoffset:0;opacity:.9}90%{opacity:0}100%{stroke-dashoffset:0;opacity:0} }
+                @keyframes mz-sun-spin   { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+                @keyframes mz-sun-pulse  { 0%,100%{opacity:.7} 50%{opacity:1} }
+                @keyframes mz-rd-fall    { 0%{transform:translateY(0);opacity:0} 15%{opacity:1} 80%{opacity:.7} 100%{transform:translateY(12px);opacity:0} }
+                .mz-d1       { animation: mz-show-d1    12s ease-in-out infinite }
+                .mz-sun-grp  { animation: mz-show-sun   12s ease-in-out infinite }
+                .mz-combo    { animation: mz-show-combo 12s ease-in-out infinite }
+                .mz-rain-grp { animation: mz-show-rain  12s ease-in-out infinite }
+                .mz-arc-ping1 { animation: mz-ping-out 2.4s ease-out infinite .4s }
+                .mz-arc-ping2 { animation: mz-ping-out 2.4s ease-out infinite .2s }
+                .mz-arc-ping3 { animation: mz-ping-out 2.4s ease-out infinite 0s }
+                .mz-dot      { animation: mz-dot-beat 2.4s ease-in-out infinite }
+                .mz-w1       { stroke-dasharray:65; animation: mz-wind-draw 2.4s ease-in-out infinite 0s }
+                .mz-w2       { stroke-dasharray:65; animation: mz-wind-draw 2.4s ease-in-out infinite .15s }
+                .mz-w3       { stroke-dasharray:65; animation: mz-wind-draw 2.4s ease-in-out infinite .3s }
+                .mz-sun-rays { transform-box:fill-box; transform-origin:center; animation: mz-sun-spin 16s linear infinite }
+                .mz-sun-core { animation: mz-sun-pulse 2s ease-in-out infinite }
+                .mz-rd1      { animation: mz-rd-fall 1.2s ease-in infinite 0s }
+                .mz-rd2      { animation: mz-rd-fall 1.2s ease-in infinite .3s }
+                .mz-rd3      { animation: mz-rd-fall 1.2s ease-in infinite .6s }
+                .mz-rd4      { animation: mz-rd-fall 1.2s ease-in infinite .15s }
               </style>
+              <!-- Radar phase -->
               <g class="mz-d1">
-                <line x1="14" y1="7" x2="11" y2="17" stroke="${css.primaryColor}" stroke-width="2.2" stroke-linecap="round" opacity="0.55"/>
-                <line x1="24" y1="4" x2="21" y2="14" stroke="${css.primaryColor}" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
-                <line x1="34" y1="7" x2="31" y2="17" stroke="${css.primaryColor}" stroke-width="2.2" stroke-linecap="round" opacity="0.55"/>
-                <path d="M22 46 A20 20 0 0 1 42 26" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round" opacity="0.28"/>
-                <path d="M22 46 A13 13 0 0 1 35 33" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round" opacity="0.6"/>
-                <path d="M22 46 A6 6 0 0 1 28 40" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round" opacity="1"/>
+                <circle cx="28" cy="28" r="22" fill="none" stroke="${css.primaryColor}" stroke-width="1.5" opacity="0.15"/>
+                <path class="mz-arc-ping1" d="M28 8 A20 20 0 0 1 48 28" fill="none" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                <path class="mz-arc-ping2" d="M28 11 A17 17 0 0 1 45 28" fill="none" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                <path class="mz-arc-ping3" d="M28 14 A14 14 0 0 1 42 28" fill="none" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                <circle class="mz-dot" cx="28" cy="28" r="3" fill="${css.primaryColor}"/>
               </g>
+              <!-- Sun phase -->
+              <g class="mz-sun-grp">
+                <g class="mz-sun-rays">
+                  <line x1="28" y1="9"  x2="28" y2="15" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                  <line x1="28" y1="41" x2="28" y2="47" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                  <line x1="9"  y1="28" x2="15" y2="28" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                  <line x1="41" y1="28" x2="47" y2="28" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                  <line x1="15" y1="15" x2="19" y2="19" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                  <line x1="37" y1="37" x2="41" y2="41" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                  <line x1="41" y1="15" x2="37" y2="19" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                  <line x1="15" y1="41" x2="19" y2="37" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+                </g>
+                <circle class="mz-sun-core" cx="28" cy="28" r="9" fill="${css.primaryColor}" opacity="0.5"/>
+                <circle cx="28" cy="28" r="5" fill="${css.primaryColor}" opacity="0.9"/>
+              </g>
+              <!-- Wind phase -->
               <g class="mz-combo">
-                <path class="mz-w1" d="M8 10 Q19 3 30 10 Q40 17 50 10" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round"/>
-                <path class="mz-w2" d="M8 20 Q21 13 33 20 Q43 27 52 19" fill="none" stroke="${css.primaryColor}" stroke-width="2.2" stroke-linecap="round"/>
-                <path class="mz-arc-ping1" d="M22 46 A20 20 0 0 1 42 26" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round"/>
-                <path class="mz-arc-ping2" d="M22 46 A13 13 0 0 1 35 33" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round"/>
-                <path class="mz-arc-ping3" d="M22 46 A6 6 0 0 1 28 40" fill="none" stroke="${css.primaryColor}" stroke-width="2.8" stroke-linecap="round"/>
+                <path class="mz-w1" d="M10 22 Q19 16 28 22 Q37 28 46 22" fill="none" stroke="${css.primaryColor}" stroke-width="2" stroke-linecap="round"/>
+                <path class="mz-w2" d="M10 28 Q19 22 28 28 Q37 34 46 28" fill="none" stroke="${css.primaryColor}" stroke-width="2" stroke-linecap="round"/>
+                <path class="mz-w3" d="M10 34 Q19 28 28 34 Q37 40 46 34" fill="none" stroke="${css.primaryColor}" stroke-width="2" stroke-linecap="round"/>
               </g>
-              <circle class="mz-dot" cx="22" cy="46" r="3.5" fill="${css.primaryColor}"/>
-              <text x="62" y="26" font-family="Segoe UI,system-ui" font-weight="700" font-size="20" fill="#ffffff" letter-spacing="0.5">Meteo</text>
-              <text x="62" y="49" font-family="Segoe UI,system-ui" font-weight="700" font-size="20" fill="${css.primaryColor}" letter-spacing="0.5">Zoomy</text>
+              <!-- Rain phase -->
+              <g class="mz-rain-grp">
+                <path d="M11 27 Q11 20 16 20 Q17 14 23 14 Q31 14 33 20 Q39 20 39 27 Q39 32 33 32 L13 32 Q11 32 11 27Z" fill="${css.primaryColor}" opacity="0.2"/>
+                <line class="mz-rd1" x1="16" y1="35" x2="14" y2="43" stroke="${css.primaryColor}" stroke-width="2" stroke-linecap="round"/>
+                <line class="mz-rd2" x1="22" y1="35" x2="20" y2="43" stroke="${css.primaryColor}" stroke-width="2" stroke-linecap="round"/>
+                <line class="mz-rd3" x1="34" y1="35" x2="32" y2="43" stroke="${css.primaryColor}" stroke-width="2" stroke-linecap="round"/>
+                <line class="mz-rd4" x1="28" y1="35" x2="26" y2="43" stroke="${css.primaryColor}" stroke-width="1.5" stroke-linecap="round"/>
+              </g>
+              <!-- Text -->
+              <text x="62" y="30" font-family="Segoe UI,system-ui" font-weight="300" font-size="22" fill="#ffffff" letter-spacing="1">Meteo</text>
+              <text x="62" y="49" font-family="Segoe UI,system-ui" font-weight="700" font-size="28" fill="${css.primaryColor}" letter-spacing="0.5">Zoomy</text>
             </svg>
           </div>
 
@@ -632,62 +670,6 @@
     }
   }
   
-  // Create and show popup
-  /* export function createPopup() {
-    if (!marker || !weatherData?.current || !maptilersdk) return;
-
-    // 📱 DETEKCIA MOBILE/DESKTOP
-    const isMobile = window.innerWidth <= 991;
-    
-    const css = getCSSVariables();
-    const popupContent = generatePopupHTML();
-    
-    // Inject CSS animations
-    injectPopupAnimations(css);
-
-    // 🎯 RÔZNE NASTAVENIA PRE MOBILE/DESKTOP
-    const popupOptions = {
-        closeButton: true,
-        closeOnClick: false,
-        className: 'weather-popup-themed'
-    };
-    
-    if (isMobile) {
-        // 📱 MOBILE: popup vyššie, užší
-        popupOptions.offset = [0, -20];
-        popupOptions.maxWidth = '260px';
-        popupOptions.anchor = 'bottom';
-    } else {
-        // 💻 DESKTOP: normálne nastavenia
-        popupOptions.offset = [0, -15];
-        popupOptions.maxWidth = '300px';
-    }
-    
-    // Create popup
-    const popup = new maptilersdk.Popup(popupOptions).setHTML(popupContent);
-    
-    // Attach popup to marker
-    marker.setPopup(popup);
-
-    // ✅ PRIDAJ EVENT LISTENER PO ZOBRAZENÍ POPUP
-    popup.on('open', () => {
-      setTimeout(() => {
-        const detailBtn = document.getElementById('popup-detail-btn');
-        if (detailBtn) {
-          detailBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            onToggleDetailPanel(); // Volaj parent funkciu
-          });
-        }
-      }, 100); // Krátke oneskorenie pre DOM rendering
-    });
-      
-    // Show popup after animation delay
-    setTimeout(() => {
-      marker.togglePopup();
-    }, 2200);
-  } */
-  // 🔄 UPRAVENÁ createPopup funkcia
 export function createPopup() {
   if (!marker || !weatherData?.current || !maptilersdk) return;
 
@@ -753,6 +735,17 @@ export function createPopup() {
   setTimeout(() => {
     marker.togglePopup();
   }, 2200);
+
+  // Fly to marker when popup is reopened — remove old listener first to avoid accumulation
+  const el = marker.getElement();
+  if (el._reopenHandler) el.removeEventListener('click', el._reopenHandler);
+  el._reopenHandler = () => {
+    setTimeout(() => {
+      const p = marker.getPopup();
+      if (p && p.isOpen()) onReopen();
+    }, 50);
+  };
+  el.addEventListener('click', el._reopenHandler);
 }
 
 function showMiniBar() {
@@ -784,6 +777,7 @@ function showMiniBar() {
   bar.addEventListener('click', () => {
     if (marker) {
       marker.togglePopup();
+      onReopen();
     }
   });
   document.body.appendChild(bar);
@@ -794,28 +788,18 @@ export function removeMiniBar() {
   if (bar) bar.remove();
 }
 
-  // Update existing popup with new theme
-  /* export function updateTheme() {
-    if (!marker) return;
-    
-    const currentPopup = marker.getPopup();
-    if (!currentPopup || !currentPopup.isOpen()) return;
-    
-    const css = getCSSVariables();
-    const popupContent = generatePopupHTML();
-    
-    // Update popup content
-    currentPopup.setHTML(popupContent);
-    
-    // Update CSS styles
-    updatePopupStyles(css);
-  } */
- // 🔄 UPRAVENÁ updateTheme funkcia
+export function closePopup() {
+  if (marker) {
+    const p = marker.getPopup();
+    if (p && p.isOpen()) p.remove();
+  }
+}
+
 export function updateTheme() {
   if (!marker) return;
-  
+
   const currentPopup = marker.getPopup();
-  if (!currentPopup || !currentPopup.isOpen()) return;
+  if (!currentPopup) return;
   
   const css = getCSSVariables();
   const popupContent = generatePopupHTML();

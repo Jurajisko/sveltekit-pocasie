@@ -716,67 +716,70 @@ body {
 }
 
 .stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-}
-@media screen and (max-width: 1195px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 14px 12px;
+  margin: 0 0 20px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
 }
 
 .stat-item {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-primary);
-  padding: 20px;
-  border-radius: 16px;
-  text-align: center;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 6px 4px;
+  border-radius: 0;
+  text-align: center;
+  position: relative;
 }
-@media screen and (max-width: 767px) {
-  .stat-item {
-    padding: 9px;
-  }
-  
+
+.stat-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 15%;
+  height: 70%;
+  width: 1px;
+  background: var(--border-secondary);
 }
 
 .stat-item:hover {
-  border-color: var(--primary-color);
-  box-shadow: var(--shadow-hover);
-  transform: translateY(-4px) scale(1.02);
+  transform: none;
+  box-shadow: none;
 }
 
 .stat-label {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 600;
-  margin-bottom: 12px;
+  margin-bottom: 0;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 .stat-value {
-  color: var(--text-primary);
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 800;
   background: var(--gradient-1);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  transition: all 0.3s ease;
-  margin-top: auto;
+  margin-top: 0;
+  line-height: 1.1;
 }
-@media screen and (max-width: 767px) {
-  .stat-value {
-    font-size: 4.7vw;
-  }
+
+.stat-unit {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 
@@ -1057,6 +1060,45 @@ body {
   }
 }
 
+/* 📱 MOBILE LAYER ICON BUTTONS - vertical left column */
+.mobile-layer-btns {
+  display: none; /* skryté na desktope */
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  gap: 8px;
+  z-index: 99;
+}
+
+.mobile-layer-btns button {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-secondary);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.mobile-layer-btns button:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.mobile-layer-btns button.active {
+  background: var(--primary-color); /* rgba(0,255,255,.9) */
+  border-color: var(--bg-primary);
+  color: var(--bg-primary);
+  box-shadow: 0 0 12px rgba(0,255,255,.3);
+}
+
 /* MapTiler SEARCH */
 #maptiler-search {
   z-index: 99;
@@ -1165,6 +1207,8 @@ body {
   max-height: 100vh;
   overflow-y: auto;
   position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color, #00ffff) transparent;
 }
 
 .detail-content {
@@ -1745,7 +1789,7 @@ body {
   }
   
   .unit-label {
-    color: var(--text-secondary);
+    color: var(--text-primary);
     font-size: 14px;
     font-weight: 500;
   }
@@ -1756,6 +1800,8 @@ body {
     backdrop-filter: blur(5px);
     overflow-x: auto;
     overflow-y: visible;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color, #00ffff) transparent;
   }
   
   .temp-chart {
@@ -1763,12 +1809,12 @@ body {
     justify-content: space-between;
     align-items: end;
     height: 300px;
-    gap: 8px;
+    gap: 16px;
     position: relative;
   }
   
   .temp-day-column {
-    flex: 1;
+    flex: 0 0 65px;
     position: relative;
     height: 100%;
     min-height: 300px;
@@ -1877,8 +1923,8 @@ body {
     justify-content: space-between;
     align-items: end;
     height: 125px;
-    gap: 12px;
-    padding: 0 8px;
+    gap: 8px;
+    padding: 0;
   }
   
   .precip-column {
@@ -1944,7 +1990,7 @@ body {
     align-items: center;
     height: 100px;
     gap: 12px;
-    padding: 0 8px;
+    padding: 0;
     overflow: auto;
   }
   
@@ -2057,7 +2103,7 @@ body {
     
     .temp-chart {
       /* height: 160px; */
-      gap: 4px;
+      gap: 16px;
     }
     
     .weather-icon-temp {
@@ -2159,11 +2205,16 @@ body {
 
     .precip-column,
     .wind-column {
-      flex: 0 0 60px;
+      flex: 0 0 62px;
     }
   }
 
 
 #section-forecast-7day .temp-chart-wrapper {
   padding-bottom: 60px;
+}
+
+/* MAP TILER */
+.maplibregl-ctrl-compass {
+  display: none !important;
 }
