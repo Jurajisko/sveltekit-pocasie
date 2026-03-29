@@ -15,6 +15,11 @@
   resolved "https://registry.npmjs.org/@capacitor/android/-/android-8.3.0.tgz"
   integrity sha512-EQy6ByUuKayQBJmMm/e0byJiHavqsQHrvW23BuT2GNVQvenAvipqwaePiJHzrv2PZr7A0T0+se4kgDCeROj0mQ==
 
+"@capacitor/app@^8.1.0":
+  version "8.1.0"
+  resolved "https://registry.npmjs.org/@capacitor/app/-/app-8.1.0.tgz"
+  integrity sha512-MlmttTOWHDedr/G4SrhNRxsXMqY+R75S4MM4eIgzsgCzOYhb/MpCkA5Q3nuOCfL1oHm26xjUzqZ5aupbOwdfYg==
+
 "@capacitor/cli@^8.3.0":
   version "8.3.0"
   resolved "https://registry.npmjs.org/@capacitor/cli/-/cli-8.3.0.tgz"
@@ -38,7 +43,7 @@
     tslib "^2.8.1"
     xml2js "^0.6.2"
 
-"@capacitor/core@^8.0.0", "@capacitor/core@^8.3.0":
+"@capacitor/core@^8.0.0", "@capacitor/core@^8.3.0", "@capacitor/core@>=8.0.0":
   version "8.3.0"
   resolved "https://registry.npmjs.org/@capacitor/core/-/core-8.3.0.tgz"
   integrity sha512-S4ajn4G/fS3VJj8salxqH/3LO5PPWv1VxGKQ27OCajnDcLJjEg9VXwgMPnlypgkIOqCJ2fmQLtk8GT+BlI9/rw==
@@ -452,7 +457,7 @@
     "@types/mapbox__point-geometry" "*"
     "@types/pbf" "*"
 
-"@types/node@*":
+"@types/node@*", "@types/node@>= 14":
   version "25.5.0"
   resolved "https://registry.npmjs.org/@types/node/-/node-25.5.0.tgz"
   integrity sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw==
@@ -1605,7 +1610,7 @@ plist@^3.1.0:
     base64-js "^1.5.1"
     xmlbuilder "^15.1.1"
 
-postcss@^8.4.18:
+"postcss@^7 || ^8", postcss@^8.4.18:
   version "8.5.6"
   resolved "https://registry.npmjs.org/postcss/-/postcss-8.5.6.tgz"
   integrity sha512-3Ybi1tAuwAP9s0r1UQ2J4n5Y0G05bJkpUIO0/bI9MhwmD70S5aTWbXGBwxHrelT+XM1k6dM0pk+SwNkpTRN7Pg==
@@ -1624,7 +1629,7 @@ prettier-plugin-svelte@^2.7.0:
   resolved "https://registry.npmjs.org/prettier-plugin-svelte/-/prettier-plugin-svelte-2.10.1.tgz"
   integrity sha512-Wlq7Z5v2ueCubWo0TZzKc9XHcm7TDxqcuzRuGd0gcENfzfT4JZ9yDlCbEgxWgiPmLHkBjfOtpAWkcT28MCDpUQ==
 
-prettier@^2.6.2:
+"prettier@^1.16.4 || ^2.0.0", prettier@^2.6.2:
   version "2.8.8"
   resolved "https://registry.npmjs.org/prettier/-/prettier-2.8.8.tgz"
   integrity sha512-tdN8qQGvNjw4CHbY+XXk0JgCXn9QiF21a55rBe5LJAU+kDyC4WQn4+awm2Xfk2lQMk5fKup9XgzTZtGkjBdP9Q==
@@ -1796,7 +1801,7 @@ sander@^0.5.0:
     mkdirp "^0.5.1"
     rimraf "^2.5.2"
 
-sass@*:
+sass@*, sass@^1.26.8:
   version "1.89.2"
   resolved "https://registry.npmjs.org/sass/-/sass-1.89.2.tgz"
   integrity sha512-xCmtksBKd/jdJ9Bt9p7nPKiuqrlBMBuuGkQlkhZjjQk3Ty48lv93k5Dq6OPkKt4XwxDJ7tvlfrTa1MPA9bf+QA==
@@ -1970,7 +1975,7 @@ svelte-preprocess@^4.0.0:
     sorcery "^0.10.0"
     strip-indent "^3.0.0"
 
-svelte@^3.46.0:
+"svelte@^3.19.0 || ^4.0.0", "svelte@^3.2.0 || ^4.0.0-next.0", svelte@^3.23.0, svelte@^3.24.0, svelte@^3.44.0, svelte@^3.46.0:
   version "3.59.2"
   resolved "https://registry.npmjs.org/svelte/-/svelte-3.59.2.tgz"
   integrity sha512-vzSyuGr3eEoAtT/A6bmajosJZIUWySzY2CzB3w2pgPvnkUjGqlDnsNnA0PMO+mMAhuyMul6C2uuZzY6ELSkzyA==
@@ -2050,7 +2055,7 @@ tslib@^2.0.1, tslib@^2.1.0, tslib@^2.6.2, tslib@^2.8.1:
   resolved "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz"
   integrity sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==
 
-typescript@*:
+typescript@*, "typescript@^3.9.5 || ^4.0.0":
   version "5.8.3"
   resolved "https://registry.npmjs.org/typescript/-/typescript-5.8.3.tgz"
   integrity sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ==
@@ -2102,7 +2107,7 @@ uuid@^11.0.5:
   resolved "https://registry.npmjs.org/uuid/-/uuid-11.1.0.tgz"
   integrity sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==
 
-vite@^3.0.8:
+vite@^3.0.0, "vite@^3.0.0 || ^4.0.0 || ^5.0.0", vite@^3.0.8:
   version "3.2.11"
   resolved "https://registry.npmjs.org/vite/-/vite-3.2.11.tgz"
   integrity sha512-K/jGKL/PgbIgKCiJo5QbASQhFiV02X9Jh+Qq0AKCRCRKZtOTVi4t6wh75FDpGf2N9rYOnzH87OEFQNaFy6pdxQ==
