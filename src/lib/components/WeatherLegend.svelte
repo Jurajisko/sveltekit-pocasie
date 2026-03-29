@@ -60,7 +60,7 @@
   <div class="legend-bar" style="background: {gradient}; min-height: {labels.length * 22}px;"></div>
   <div class="legend-labels">
     {#each labels as stop}
-      <div class="legend-label">{Math.round(stop.value)}{unit}</div>
+      <div class="legend-label">{stop.value < 1 && stop.value > 0 ? stop.value.toFixed(1) : Math.round(stop.value)}{unit}</div>
     {/each}
   </div>
 </div>
