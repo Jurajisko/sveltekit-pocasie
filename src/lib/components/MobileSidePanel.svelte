@@ -6,10 +6,30 @@
 
   $: t = $i18n;
 
+  let APP_VERSION = '';
+
+  onMount(async () => {
+    try {
+      const { App } = await import('@capacitor/app');
+      const info = await App.getInfo();
+      APP_VERSION = info.version;
+    } catch {
+      APP_VERSION = '';
+    }
+  });
+
   const languages = [
     { id: 'sk', flag: '🇸🇰' },
     { id: 'en', flag: '🇬🇧' },
-    { id: 'de', flag: '🇩🇪' }
+    { id: 'de', flag: '🇩🇪' },
+    { id: 'ru', flag: '🇷🇺' },
+    { id: 'es', flag: '🇪🇸' },
+    { id: 'ja', flag: '🇯🇵' },
+    { id: 'fr', flag: '🇫🇷' },
+    { id: 'hi', flag: '🇮🇳' },
+    { id: 'pt', flag: '🇧🇷' },
+    { id: 'ko', flag: '🇰🇷' },
+    { id: 'cs', flag: '🇨🇿' }
   ];
 
   // Props
@@ -21,11 +41,11 @@
   
   // Data - ROVNAKÉ ako predtým
   const weatherLayers = [
-    { id: 'precipitation', key: 'precipitation', icon: '🌧️' },
-    { id: 'temperature', key: 'temperature', icon: '🌡️' },
-    { id: 'wind', key: 'wind', icon: '💨' },
-    { id: 'pressure', key: 'pressure', icon: '📊' },
-    { id: 'radar', key: 'radar', icon: '📡' }
+    { id: 'precipitation', key: 'precipitation', svg: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="19" x2="8" y2="21"/><line x1="8" y1="13" x2="8" y2="15"/><line x1="16" y1="19" x2="16" y2="21"/><line x1="16" y1="13" x2="16" y2="15"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="12" y1="15" x2="12" y2="17"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>` },
+    { id: 'temperature', key: 'temperature', svg: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>` },
+    { id: 'wind', key: 'wind', svg: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>` },
+    { id: 'pressure', key: 'pressure', svg: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 6v6l4 2"/></svg>` },
+    { id: 'radar', key: 'radar', svg: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.07 12a7 7 0 1 0 7-7"/><path d="M2.05 12a10 10 0 1 0 10-10"/><circle cx="12" cy="12" r="1" fill="currentColor"/><line x1="12" y1="12" x2="20" y2="5"/></svg>` }
   ];
 
   const themes = [
@@ -113,85 +133,73 @@
     <div class="panel-header">
       <svg class="panel-logo" width="180" height="56" viewBox="0 0 180 56" xmlns="http://www.w3.org/2000/svg">
         <style>
-          /* ── Striedanie skupín: 9s cyklus ─────────────────
-             0–3s   D1 viditeľné
-             3–4s   prechod D1→Combo
-             4–7s   Combo viditeľné
-             7–8s   prechod Combo→D1
-             8–9s   D1 viditeľné (loop)
-          ─────────────────────────────────────────────── */
-          @keyframes mz-show-d1 {
-            0%   { opacity: 1; }
-            33%  { opacity: 1; }
-            44%  { opacity: 0; }
-            78%  { opacity: 0; }
-            89%  { opacity: 1; }
-            100% { opacity: 1; }
-          }
-          @keyframes mz-show-combo {
-            0%   { opacity: 0; }
-            33%  { opacity: 0; }
-            44%  { opacity: 1; }
-            78%  { opacity: 1; }
-            89%  { opacity: 0; }
-            100% { opacity: 0; }
-          }
-          /* ── Radar ping (pre Combo skupinu) ───────────── */
-          @keyframes mz-ping-out {
-            0%   { opacity: 0;    }
-            10%  { opacity: 1;    }
-            60%  { opacity: 0.25; }
-            100% { opacity: 0;    }
-          }
-          /* ── Dot beat (vždy) ──────────────────────────── */
-          @keyframes mz-dot-beat {
-            0%, 100% { opacity: 1;   }
-            40%      { opacity: 0.4; }
-          }
-          /* ── Wind draw (pre Combo skupinu) ───────────── */
-          @keyframes mz-wind-draw {
-            0%   { stroke-dashoffset: 65; opacity: 0;   }
-            15%  { opacity: 0.9; }
-            70%  { stroke-dashoffset: 0;  opacity: 0.9; }
-            90%  { opacity: 0;   }
-            100% { stroke-dashoffset: 0;  opacity: 0;   }
-          }
-
-          .mz-d1    { animation: mz-show-d1    9s ease-in-out infinite; }
-          .mz-combo { animation: mz-show-combo 9s ease-in-out infinite; }
-
-          .mz-arc-ping1 { animation: mz-ping-out 2.4s ease-out infinite 0.4s; }
-          .mz-arc-ping2 { animation: mz-ping-out 2.4s ease-out infinite 0.2s; }
-          .mz-arc-ping3 { animation: mz-ping-out 2.4s ease-out infinite 0s;   }
-
-          .mz-dot { animation: mz-dot-beat 2.4s ease-in-out infinite; }
-
-          .mz-w1  { stroke-dasharray: 65; animation: mz-wind-draw 2.4s ease-in-out infinite 0s;    }
-          .mz-w2  { stroke-dasharray: 60; animation: mz-wind-draw 2.4s ease-in-out infinite 0.28s; }
+          @keyframes mz-show-d1    { 0%{opacity:1} 23%{opacity:1} 26%{opacity:0} 97%{opacity:0} 100%{opacity:1} }
+          @keyframes mz-show-sun   { 0%{opacity:0} 23%{opacity:0} 26%{opacity:1} 48%{opacity:1} 51%{opacity:0} 100%{opacity:0} }
+          @keyframes mz-show-combo { 0%{opacity:0} 48%{opacity:0} 51%{opacity:1} 73%{opacity:1} 76%{opacity:0} 100%{opacity:0} }
+          @keyframes mz-show-rain  { 0%{opacity:0} 73%{opacity:0} 76%{opacity:1} 97%{opacity:1} 100%{opacity:0} }
+          @keyframes mz-ping-out   { 0%{opacity:0}10%{opacity:1}60%{opacity:.25}100%{opacity:0} }
+          @keyframes mz-dot-beat   { 0%,100%{opacity:1}40%{opacity:.4} }
+          @keyframes mz-wind-draw  { 0%{stroke-dashoffset:65;opacity:0}15%{opacity:.9}70%{stroke-dashoffset:0;opacity:.9}90%{opacity:0}100%{stroke-dashoffset:0;opacity:0} }
+          @keyframes mz-sun-spin   { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+          @keyframes mz-sun-pulse  { 0%,100%{opacity:.7} 50%{opacity:1} }
+          @keyframes mz-rd-fall    { 0%{transform:translateY(0);opacity:0} 15%{opacity:1} 80%{opacity:.7} 100%{transform:translateY(12px);opacity:0} }
+          .mz-d1       { animation: mz-show-d1    12s ease-in-out infinite }
+          .mz-sun-grp  { animation: mz-show-sun   12s ease-in-out infinite }
+          .mz-combo    { animation: mz-show-combo 12s ease-in-out infinite }
+          .mz-rain-grp { animation: mz-show-rain  12s ease-in-out infinite }
+          .mz-arc-ping1 { animation: mz-ping-out 2.4s ease-out infinite .4s }
+          .mz-arc-ping2 { animation: mz-ping-out 2.4s ease-out infinite .2s }
+          .mz-arc-ping3 { animation: mz-ping-out 2.4s ease-out infinite 0s }
+          .mz-dot      { animation: mz-dot-beat 2.4s ease-in-out infinite }
+          .mz-w1       { stroke-dasharray:65; animation: mz-wind-draw 2.4s ease-in-out infinite 0s }
+          .mz-w2       { stroke-dasharray:65; animation: mz-wind-draw 2.4s ease-in-out infinite .15s }
+          .mz-w3       { stroke-dasharray:65; animation: mz-wind-draw 2.4s ease-in-out infinite .3s }
+          .mz-sun-rays { transform-box:fill-box; transform-origin:center; animation: mz-sun-spin 16s linear infinite }
+          .mz-sun-core { animation: mz-sun-pulse 2s ease-in-out infinite }
+          .mz-rd1      { animation: mz-rd-fall 1.2s ease-in infinite 0s }
+          .mz-rd2      { animation: mz-rd-fall 1.2s ease-in infinite .3s }
+          .mz-rd3      { animation: mz-rd-fall 1.2s ease-in infinite .6s }
+          .mz-rd4      { animation: mz-rd-fall 1.2s ease-in infinite .15s }
         </style>
-
-        <!-- ── D1: dažďové kvapky + statický radar ─────── -->
+        <!-- Radar phase -->
         <g class="mz-d1">
-          <line x1="14" y1="7"  x2="11" y2="17" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round" opacity="0.55"/>
-          <line x1="24" y1="4"  x2="21" y2="14" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>
-          <line x1="34" y1="7"  x2="31" y2="17" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round" opacity="0.55"/>
-          <path d="M22 46 A20 20 0 0 1 42 26" fill="none" stroke="var(--primary-color)" stroke-width="2.8" stroke-linecap="round" opacity="0.28"/>
-          <path d="M22 46 A13 13 0 0 1 35 33" fill="none" stroke="var(--primary-color)" stroke-width="2.8" stroke-linecap="round" opacity="0.6"/>
-          <path d="M22 46 A6  6  0 0 1 28 40" fill="none" stroke="var(--primary-color)" stroke-width="2.8" stroke-linecap="round" opacity="1"/>
+          <circle cx="28" cy="28" r="22" fill="none" stroke="var(--primary-color)" stroke-width="1.5" opacity="0.15"/>
+          <path class="mz-arc-ping1" d="M28 8 A20 20 0 0 1 48 28" fill="none" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+          <path class="mz-arc-ping2" d="M28 11 A17 17 0 0 1 45 28" fill="none" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+          <path class="mz-arc-ping3" d="M28 14 A14 14 0 0 1 42 28" fill="none" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+          <circle class="mz-dot" cx="28" cy="28" r="3" fill="var(--primary-color)"/>
         </g>
-
-        <!-- ── Combo: vietor + pulzujúci radar ──────────── -->
+        <!-- Sun phase -->
+        <g class="mz-sun-grp">
+          <g class="mz-sun-rays">
+            <line x1="28" y1="9"  x2="28" y2="15" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="28" y1="41" x2="28" y2="47" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="9"  y1="28" x2="15" y2="28" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="41" y1="28" x2="47" y2="28" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="15" y1="15" x2="19" y2="19" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="37" y1="37" x2="41" y2="41" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="41" y1="15" x2="37" y2="19" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="15" y1="41" x2="19" y2="37" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+          </g>
+          <circle class="mz-sun-core" cx="28" cy="28" r="9" fill="var(--primary-color)" opacity="0.5"/>
+          <circle cx="28" cy="28" r="5" fill="var(--primary-color)" opacity="0.9"/>
+        </g>
+        <!-- Wind phase -->
         <g class="mz-combo">
-          <path class="mz-w1" d="M8 10 Q19 3 30 10 Q40 17 50 10" fill="none" stroke="var(--primary-color)" stroke-width="2.8" stroke-linecap="round"/>
-          <path class="mz-w2" d="M8 20 Q21 13 33 20 Q43 27 52 19" fill="none" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round"/>
-          <path class="mz-arc-ping1" d="M22 46 A20 20 0 0 1 42 26" fill="none" stroke="var(--primary-color)" stroke-width="2.8" stroke-linecap="round"/>
-          <path class="mz-arc-ping2" d="M22 46 A13 13 0 0 1 35 33" fill="none" stroke="var(--primary-color)" stroke-width="2.8" stroke-linecap="round"/>
-          <path class="mz-arc-ping3" d="M22 46 A6  6  0 0 1 28 40" fill="none" stroke="var(--primary-color)" stroke-width="2.8" stroke-linecap="round"/>
+          <path class="mz-w1" d="M10 22 Q19 16 28 22 Q37 28 46 22" fill="none" stroke="var(--primary-color)" stroke-width="2" stroke-linecap="round"/>
+          <path class="mz-w2" d="M10 28 Q19 22 28 28 Q37 34 46 28" fill="none" stroke="var(--primary-color)" stroke-width="2" stroke-linecap="round"/>
+          <path class="mz-w3" d="M10 34 Q19 28 28 34 Q37 40 46 34" fill="none" stroke="var(--primary-color)" stroke-width="2" stroke-linecap="round"/>
         </g>
-
-        <!-- ── Vždy viditeľné ────────────────────────────── -->
-        <circle class="mz-dot" cx="22" cy="46" r="3.5" fill="var(--primary-color)"/>
-        <text x="62" y="26" font-family="Segoe UI,system-ui" font-weight="700" font-size="28" fill="var(--text-primary, #fff)" letter-spacing="0.5">Meteo</text>
+        <!-- Rain phase -->
+        <g class="mz-rain-grp">
+          <path d="M11 27 Q11 20 16 20 Q17 14 23 14 Q31 14 33 20 Q39 20 39 27 Q39 32 33 32 L13 32 Q11 32 11 27Z" fill="var(--primary-color)" opacity="0.2"/>
+          <line class="mz-rd1" x1="16" y1="35" x2="14" y2="43" stroke="var(--primary-color)" stroke-width="2" stroke-linecap="round"/>
+          <line class="mz-rd2" x1="22" y1="35" x2="20" y2="43" stroke="var(--primary-color)" stroke-width="2" stroke-linecap="round"/>
+          <line class="mz-rd3" x1="34" y1="35" x2="32" y2="43" stroke="var(--primary-color)" stroke-width="2" stroke-linecap="round"/>
+          <line class="mz-rd4" x1="28" y1="35" x2="26" y2="43" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round"/>
+        </g>
+        <!-- Text -->
+        <text x="62" y="30" font-family="Segoe UI,system-ui" font-weight="300" font-size="22" fill="var(--text-primary, #fff)" letter-spacing="1">Meteo</text>
         <text x="62" y="49" font-family="Segoe UI,system-ui" font-weight="700" font-size="28" fill="var(--primary-color)" letter-spacing="0.5">Zoomy</text>
       </svg>
       <button class="panel-close" on:click={closePanel}>✕</button>
@@ -201,19 +209,26 @@
     <div class="panel-section">
       <h3>🌤️ {t('layers')}</h3>
 
-      {#each weatherLayers as layer}
+      <div class="layer-grid">
         <button
           class="layer-item"
-          class:active={activeLayer === layer.id}
-          on:click={() => handleLayerSelect(layer.id)}
+          class:active={activeLayer === null}
+          on:click={() => handleLayerSelect(null)}
         >
-          <span class="layer-icon">{layer.icon}</span>
-          <span class="layer-name">{t(layer.key)}</span>
-          <span class="layer-indicator">
-            {activeLayer === layer.id ? '●' : '○'}
-          </span>
+          <span class="layer-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></span>
+          <span class="layer-name">{t('layer_clear')}</span>
         </button>
-      {/each}
+        {#each weatherLayers as layer}
+          <button
+            class="layer-item"
+            class:active={activeLayer === layer.id}
+            on:click={() => handleLayerSelect(layer.id)}
+          >
+            <span class="layer-icon">{@html layer.svg}</span>
+            <span class="layer-name">{t(layer.key)}</span>
+          </button>
+        {/each}
+      </div>
     </div>
 
     <!-- THEMES -->
@@ -277,10 +292,20 @@
         </div>
       </div>
     </div>
+
+    <div class="app-version">v{APP_VERSION}</div>
   </div>
 {/if}
 
 <style>
+  .app-version {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-secondary, #8892b0);
+    opacity: 0.5;
+    padding: 12px 0 4px;
+  }
+
   .theme-list {
     display: flex;
   }
@@ -392,6 +417,8 @@
     box-shadow: var(--shadow-hover);
     z-index: 999;
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary-color, #00ffff) transparent;
     padding: 0 0 80px 0;
     /* ✅ CSS ANIMATION namiesto Svelte transition */
     animation: slideInLeft 0.3s ease-out;
@@ -455,55 +482,60 @@
     font-size: 16px;
     font-weight: 700;
     color: var(--text-primary);
-    margin: 0 0 16px 0;
+    margin: 0 0 3px 0;
     padding: 12px 0;
     border-bottom: 2px solid var(--primary-color);
   }
 
+  /* LAYER GRID */
+  .layer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
   /* LAYER ITEMS */
   .layer-item {
-    width: 100%;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: 6px;
+    padding: 10px 8px;
     background: transparent;
     border: 1px solid var(--border-secondary);
-    border-radius: 12px;
-    margin-bottom: 8px;
+    border-radius: 10px;
     cursor: pointer;
-    transition: all 0.3s ease;
-    color: var(--text-primary);
+    transition: all 0.2s ease;
+    color: var(--text-secondary);
   }
 
   .layer-item:hover {
     background: var(--bg-glass);
     border-color: var(--border-primary);
-    transform: translateX(4px);
+    color: var(--text-primary);
   }
 
   .layer-item.active {
-    background: var(--gradient-2);
+    background: rgba(0,255,255,0.08);
     border-color: var(--primary-color);
-    box-shadow: 0 4px 12px var(--shadow-primary);
+    color: var(--primary-color);
+    box-shadow: 0 0 10px rgba(0,255,255,0.15);
   }
 
   .layer-icon {
-    font-size: 18px;
-    width: 24px;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .layer-name {
-    flex: 1;
-    font-weight: 600;
-    font-size: 14px;
+    font-weight: 500;
+    font-size: 11px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
-  .layer-indicator {
-    font-size: 16px;
-    color: var(--primary-color);
-  }
 
   /* THEME ITEMS */
   .theme-item {
@@ -603,7 +635,7 @@
       width: 40px;
       height: 40px;
       top: 16px;
-      left: 16px;
+      left: 11px;
     }
   }
 
